@@ -236,18 +236,17 @@ else:
     X_pca_k = np.empty((len(df_view), 0))
     k = 0
 
-# ========= Sección MCA =========
+# ========= Sección MCA (mejorada) =========
 st.header("🔸 MCA (variables categóricas)")
 if len(cat_cols_mca) >= 2:
     try:
-        import prince  # import aquí para mostrar error claro si falta
+        import prince, altair as alt
 
         X_cat = df_view[cat_cols_mca].astype(str)
 
         # Ajuste de MCA
         max_components = max(2, min(15, len(cat_cols_mca) - 1))
-        mca_model = prince.MCA(n_components=max_components, random_state=42)
-        mca_model = mca_model.fit(X_cat)
+        mca_model = prince.MCA(n_components=max_components, random_state=42).fit(X_cat)
         X_mca_all = mca_model.transform(X_cat)
 
         # Varianza acumulada
@@ -256,10 +255,9 @@ if len(cat_cols_mca) >= 2:
         var_exp = eig_vals / eig_vals.sum()
         cum_var = np.cumsum(var_exp)
         d = int(np.argmax(cum_var >= variance_threshold) + 1)
-
         st.write(f"Dimensiones para ≥{int(variance_threshold*100)}% varianza explicada: **{d}**")
 
-        # Curva varianza acumulada
+        # Curva de varianza acumulada (matplotlib para mantener estilo)
         fig4, ax4 = plt.subplots(figsize=(6, 4))
         ax4.plot(range(1, len(cum_var)+1), cum_var, marker="o", linestyle="--")
         ax4.axhline(y=variance_threshold)
@@ -269,24 +267,80 @@ if len(cat_cols_mca) >= 2:
         ax4.grid(True)
         st.pyplot(fig4, clear_figure=True)
 
-        # Contribución por variable (Dim 1 y 2)
+        # ---------- Contribuciones ----------
+        # Coordenadas de columnas (categorías)
         coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
         coords_sq = coords ** 2
-        contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)
-        contrib.index = contrib.index.str.split("__").str[0]
-        contrib_var = contrib.groupby(contrib.index).sum().sum(axis=1)
-        contrib_pct = (contrib_var / contrib_var.sum() * 100).sort_values()
+        contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
 
-        fig5, ax5 = plt.subplots(figsize=(10, 8))
-        ax5.barh(contrib_pct.index, contrib_pct.values)
-        ax5.set_xlabel("Contribución (%) a Dim 1 y 2")
-        ax5.set_title("MCA — Contribución por variable")
-        for i, v in enumerate(contrib_pct.values):
-            ax5.text(v + 0.2, i, f"{v:.2f}%")
-        st.pyplot(fig5, clear_figure=True)
+        # a) AGRUPADO POR VARIABLE
+        contrib_var = contrib.groupby(contrib.index.str.split("__").str[0]).sum().sum(axis=1)
+        contrib_var_pct = (contrib_var / contrib_var.sum() * 100).sort_values(ascending=False)
+        df_var = contrib_var_pct.reset_index()
+        df_var.columns = ["variable", "pct"]
 
-        # Reduce a d dimensiones
-        # X_mca_all puede ser DataFrame o ndarray
+        # b) CATEGORÍAS (levels) individuales
+        contrib_cat_pct = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100).sort_values(ascending=False)
+        df_cat = contrib_cat_pct.reset_index()
+        split = df_cat["index"].str.split("__", n=1, expand=True)
+        df_cat["variable"] = split[0]
+        df_cat["categoria"] = split[1].fillna("")
+        df_cat = df_cat.drop(columns=["index"]).rename(columns={"pct": "pct"})
+
+        st.subheader("📈 Contribuciones a Dim 1 y 2")
+        mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
+        max_items = 60  # límite superior razonable
+        top_n = st.slider("Top N a mostrar", 5, min(max_items, max(len(df_var), len(df_cat))), 15)
+
+        if mode == "Variables (agrupado)":
+            df_plot = df_var.copy()
+            top = df_plot.head(top_n)
+            if len(df_plot) > top_n:
+                otros = pd.DataFrame([{"variable": "Otros", "pct": df_plot["pct"].iloc[top_n:].sum()}])
+                df_show = pd.concat([top, otros], ignore_index=True)
+            else:
+                df_show = top
+
+            # Altura dinámica para evitar sobreposición
+            height = int(20 * len(df_show) + 120)
+
+            chart = (
+                alt.Chart(df_show)
+                .mark_bar()
+                .encode(
+                    x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
+                    y=alt.Y("variable:N", sort="-x", title=None),
+                    tooltip=[alt.Tooltip("variable:N", title="Variable"),
+                             alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
+                )
+                .properties(height=height, use_container_width=True,
+                            title="MCA — Contribución por variable (Top N + Otros)")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        else:  # "Categorías (niveles)"
+            df_plot = df_cat.copy().head(top_n)
+            height = int(20 * len(df_plot) + 140)
+
+            chart = (
+                alt.Chart(df_plot)
+                .mark_bar()
+                .encode(
+                    x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
+                    y=alt.Y("categoria:N", sort="-x", title=None),
+                    color=alt.Color("variable:N", legend=alt.Legend(title="Variable", orient="right")),
+                    tooltip=[
+                        alt.Tooltip("variable:N", title="Variable"),
+                        alt.Tooltip("categoria:N", title="Categoría"),
+                        alt.Tooltip("pct:Q", format=".2f", title="Contribución %")
+                    ],
+                )
+                .properties(height=height, use_container_width=True,
+                            title="MCA — Contribución por categoría (Top N)")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        # Reduce a d dimensiones para concatenación final
         X_mca_used = X_mca_all.iloc[:, :d].values if hasattr(X_mca_all, "iloc") else X_mca_all[:, :d]
 
     except Exception as e:
