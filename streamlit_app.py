@@ -143,7 +143,7 @@ st.dataframe(df.head())
 
 df_view = df.sample(sample_size, random_state=42) if (sample_on and len(df) > sample_size) else df.copy()
 if sample_on and len(df) > sample_size:
-    st.caption(f"Mostrando muestra aleatoria de {len[df_view]} filas (de {len(df)}).")
+    st.caption(f"Mostrando muestra aleatoria de {len(df_view)} filas (de {len(df)}).")
 
 target = "readmitted" if "readmitted" in df_view.columns else None
 if target:
