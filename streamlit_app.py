@@ -269,10 +269,54 @@ if len(cat_cols_mca) >= 2:
 
         # ---------- Contribuciones ----------
         # Coordenadas de columnas (categorías)
-        coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
-        coords_sq = coords ** 2
-        contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
+# ---------- Contribuciones (parser robusto de etiquetas) ----------
+coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
+coords_sq = coords ** 2
+contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
 
+# --- función para partir etiquetas de prince ---
+def split_label(label: str, known_vars: list[str]):
+    label = str(label)
+    # separadores más comunes en prince/one-hot
+    for sep in ["__", "=", ":", "|"]:
+        if sep in label:
+            a, b = label.split(sep, 1)
+            return a, b
+    # caso con "_" → usa prefijo solo si es una variable conocida
+    if "_" in label:
+        pref, suf = label.split("_", 1)
+        if pref in known_vars:
+            return pref, suf
+    # por defecto: todo es 'variable' y no hay categoría explícita
+    return label, ""
+
+# --- Series con contribución por etiqueta (categoría/level) ---
+pct_by_label = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100)
+labels = pct_by_label.index.tolist()
+
+# parseo de todas las etiquetas
+vars_parsed, cats_parsed = [], []
+for lab in labels:
+    v, c = split_label(lab, cat_cols_mca)
+    vars_parsed.append(v)
+    cats_parsed.append(c)
+
+# DataFrame de categorías (niveles individuales)
+df_cat = (
+    pd.DataFrame({
+        "variable": vars_parsed,
+        "categoria": cats_parsed,
+        "pct": pct_by_label.values
+    })
+    .sort_values("pct", ascending=False)
+    .reset_index(drop=True)
+)
+
+# DataFrame de variables (agrupado) usando el mismo parser
+contrib_var_pct = (
+    df_cat.groupby("variable")["pct"].sum().sort_values(ascending=False)
+)
+df_var = contrib_var_pct.rename("pct").reset_index()
         # a) AGRUPADO POR VARIABLE
         contrib_var = contrib.groupby(contrib.index.str.split("__").str[0]).sum().sum(axis=1)
         contrib_var_pct = (contrib_var / contrib_var.sum() * 100).sort_values(ascending=False)
