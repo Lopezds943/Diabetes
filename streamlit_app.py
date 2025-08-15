@@ -9,29 +9,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-# ========= Carga de datos (robusta, sin 'or' con DataFrames) =========
-df = None
-
-if uploaded is not None:
-    # UploadedFile se lee directo con pandas
-    try:
-        df = pd.read_csv(uploaded)
-    except Exception as e:
-        st.error(f"❌ No pude leer el CSV subido: {e}")
-        st.stop()
-else:
-    local_df = load_local_csv("diabetic_data.csv")
-    if local_df is not None:
-        df = local_df
-    else:
-        df = load_from_uci()
-
-# Validación final
-if not isinstance(df, pd.DataFrame) or df.empty:
-    st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
-    st.stop()
-
-
 # ========= Configuración de página =========
 st.set_page_config(page_title="Diabetes 130 — PCA & MCA", layout="wide")
 st.title("📊 Diabetes 130-US Hospitals — PCA & MCA (Streamlit)")
@@ -40,6 +17,7 @@ st.caption("App interactiva con validaciones, carga de datos flexible y manejo d
 # ========= Utilidades =========
 @st.cache_data(show_spinner=False)
 def load_local_csv(path: str):
+    """Lee un CSV local si existe; si falla devuelve None."""
     if os.path.exists(path):
         try:
             return pd.read_csv(path)
@@ -67,7 +45,7 @@ def load_from_uci():
         return None
 
 def map_code_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Aplica mapeos de códigos a texto en 3 columnas, si existen."""
+    """Mapea IDs de admisión/alta/fuente a etiquetas en español si las columnas existen."""
     for col in ["admission_type_id", "discharge_disposition_id", "admission_source_id"]:
         if col in df.columns:
             df[col] = df[col].astype(str)
@@ -126,27 +104,39 @@ sample_on = st.sidebar.checkbox("Usar muestra para visualizar más rápido", val
 sample_size = st.sidebar.slider("Tamaño de muestra", 200, 20000, 3000, 200)
 variance_threshold = st.sidebar.slider("Umbral de varianza acumulada (%)", 70, 95, 85, 1) / 100.0
 
-# ========= Carga de datos =========
+# ========= Carga de datos (robusta, sin 'or' con DataFrames) =========
+df = None
+if uploaded is not None:
+    try:
+        df = pd.read_csv(uploaded)
+    except Exception as e:
+        st.error(f"❌ No pude leer el CSV subido: {e}")
+        st.stop()
+else:
+    local_df = load_local_csv("diabetic_data.csv")
+    if local_df is not None:
+        df = local_df
+    else:
+        df = load_from_uci()
 
-if df is None or df.empty:
+# Validación final
+if not isinstance(df, pd.DataFrame) or df.empty:
     st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
     st.stop()
 
-# Limpieza básica y mapeos
+# ========= Limpieza básica =========
 df = df.replace(["None", "?"], pd.NA)
 df = map_code_columns(df)
 
-# Rellena categóricas faltantes
 for c in df.select_dtypes(include="object").columns:
     if df[c].isna().any():
         df[c] = df[c].fillna("Sin_info")
 
-# Quita identificadores si existen
 for c in ["encounter_id", "patient_nbr"]:
     if c in df.columns:
         df = df.drop(columns=[c])
 
-# Muestra previa + muestreo opcional
+# ========= Preview =========
 st.subheader("👀 Vista rápida de datos")
 st.write("Shape:", df.shape)
 st.dataframe(df.head())
@@ -155,13 +145,12 @@ df_view = df.sample(sample_size, random_state=42) if (sample_on and len(df) > sa
 if sample_on and len(df) > sample_size:
     st.caption(f"Mostrando muestra aleatoria de {len(df_view)} filas (de {len(df)}).")
 
-# Target (si existe)
 target = "readmitted" if "readmitted" in df_view.columns else None
 if target:
     st.write("Distribución de **readmitted**:")
     st.write(df_view[target].value_counts(dropna=False))
 
-# ========= Determina columnas válidas =========
+# ========= Columnas válidas =========
 num_cols_pca = numeric_cols_present(df_view)
 cat_cols_mca = categorical_cols_present(df_view)
 
@@ -305,7 +294,7 @@ if len(cat_cols_mca) >= 2:
         mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
         max_items = 60
         max_count = max(1, min(max_items, max(len(df_var), len(df_cat))))
-        top_n = st.slider("Top N a mostrar", 5, max(5, max_count), min(15, max_count))
+        top_n = st.slider("Top N a mostrar", 1, max_count, min(15, max_count))
 
         if mode == "Variables (agrupado)":
             df_plot = df_var.copy()
