@@ -19,10 +19,6 @@ from sklearn.feature_selection import SelectKBest, chi2, f_classif
 from matplotlib import pyplot
 from sklearn.impute import SimpleImputer
 
-pip install ucimlrepo
-
-from ucimlrepo import fetch_ucirepo
-
 # fetch dataset
 diabetes_130_us_hospitals_for_years_1999_2008 = fetch_ucirepo(id=296)
 
