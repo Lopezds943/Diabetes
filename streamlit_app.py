@@ -284,11 +284,20 @@ if len(cat_cols_mca) >= 2:
             .reset_index(drop=True)
         )
         # Variables (agrupado)
-        df_var = (
-            df_cat.groupby("variable", as_index=False)["pct"].sum()
-            .sort_values("pct", ascending=False)
-            .reset_index(drop=True)
+        chart = (
+            alt.Chart(df_show)
+            .mark_bar()
+            .encode(
+                x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
+                y=alt.Y("variable:N", sort="-x", title=None),
+                tooltip=[alt.Tooltip("variable:N", title="Variable"),
+                         alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
+            )
+            # 👇 QUITAMOS use_container_width DE properties
+            .properties(height=height, title="MCA — Contribución por variable (Top N + Otros)")
         )
+# ✅ aquí SÍ va use_container_width
+st.altair_chart(chart, use_container_width=True)
 
         st.subheader("📈 Contribuciones a Dim 1 y 2")
         mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
