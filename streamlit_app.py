@@ -353,4 +353,12 @@ else:
 st.header("🧱 Representación reducida (PCA + MCA)")
 try:
     X_reduced = np.hstack((X_pca_k, X_mca_used))
-    st.success(f
+    st.success(f"Dimensionalidad final: {X_reduced.shape}  (PCA={k}, MCA={d})")
+    preview_cols = [f"PCA_{i+1}" for i in range(X_pca_k.shape[1])] + [f"MCA_{i+1}" for i in range(X_mca_used.shape[1])]
+    preview_df = pd.DataFrame(X_reduced, columns=preview_cols)
+    st.dataframe(preview_df.head())
+except Exception as e:
+    st.error("No fue posible concatenar las representaciones reducidas.")
+    st.exception(e)
+
+st.caption("© Bioestadística — Demo PCA/MCA con Streamlit")
