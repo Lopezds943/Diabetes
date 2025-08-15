@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+import altair as alt
 
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
@@ -104,7 +105,7 @@ sample_on = st.sidebar.checkbox("Usar muestra para visualizar más rápido", val
 sample_size = st.sidebar.slider("Tamaño de muestra", 200, 20000, 3000, 200)
 variance_threshold = st.sidebar.slider("Umbral de varianza acumulada (%)", 70, 95, 85, 1) / 100.0
 
-# ========= Carga de datos (robusta, sin 'or' con DataFrames) =========
+# ========= Carga de datos (robusta) =========
 df = None
 if uploaded is not None:
     try:
@@ -119,7 +120,6 @@ else:
     else:
         df = load_from_uci()
 
-# Validación final
 if not isinstance(df, pd.DataFrame) or df.empty:
     st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
     st.stop()
@@ -143,7 +143,7 @@ st.dataframe(df.head())
 
 df_view = df.sample(sample_size, random_state=42) if (sample_on and len(df) > sample_size) else df.copy()
 if sample_on and len(df) > sample_size:
-    st.caption(f"Mostrando muestra aleatoria de {len(df_view)} filas (de {len(df)}).")
+    st.caption(f"Mostrando muestra aleatoria de {len[df_view]} filas (de {len(df)}).")
 
 target = "readmitted" if "readmitted" in df_view.columns else None
 if target:
@@ -231,11 +231,10 @@ else:
 st.header("🔸 MCA (variables categóricas)")
 if len(cat_cols_mca) >= 2:
     try:
-        import prince, altair as alt
-
         X_cat = df_view[cat_cols_mca].astype(str)
 
         max_components = max(2, min(15, len(cat_cols_mca) - 1))
+        import prince
         mca_model = prince.MCA(n_components=max_components, random_state=42).fit(X_cat)
         X_mca_all = mca_model.transform(X_cat)
 
@@ -277,27 +276,17 @@ if len(cat_cols_mca) >= 2:
             v, c = split_label(lab, cat_cols_mca)
             vars_parsed.append(v); cats_parsed.append(c)
 
-        # Categorías (niveles)
+        # DataFrames para graficar
         df_cat = (
             pd.DataFrame({"variable": vars_parsed, "categoria": cats_parsed, "pct": pct_by_label.values})
             .sort_values("pct", ascending=False)
             .reset_index(drop=True)
         )
-        # Variables (agrupado)
-        chart = (
-            alt.Chart(df_show)
-            .mark_bar()
-            .encode(
-                x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
-                y=alt.Y("variable:N", sort="-x", title=None),
-                tooltip=[alt.Tooltip("variable:N", title="Variable"),
-                         alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
-            )
-            # 👇 QUITAMOS use_container_width DE properties
-            .properties(height=height, title="MCA — Contribución por variable (Top N + Otros)")
+        df_var = (
+            df_cat.groupby("variable", as_index=False)["pct"].sum()
+            .sort_values("pct", ascending=False)
+            .reset_index(drop=True)
         )
-# ✅ aquí SÍ va use_container_width
-st.altair_chart(chart, use_container_width=True)
 
         st.subheader("📈 Contribuciones a Dim 1 y 2")
         mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
@@ -324,8 +313,7 @@ st.altair_chart(chart, use_container_width=True)
                     tooltip=[alt.Tooltip("variable:N", title="Variable"),
                              alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
                 )
-                .properties(height=height, use_container_width=True,
-                            title="MCA — Contribución por variable (Top N + Otros)")
+                .properties(height=height, title="MCA — Contribución por variable (Top N + Otros)")
             )
             st.altair_chart(chart, use_container_width=True)
 
@@ -344,8 +332,7 @@ st.altair_chart(chart, use_container_width=True)
                              alt.Tooltip("categoria:N", title="Categoría"),
                              alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
                 )
-                .properties(height=height, use_container_width=True,
-                            title="MCA — Contribución por categoría (Top N)")
+                .properties(height=height, title="MCA — Contribución por categoría (Top N)")
             )
             st.altair_chart(chart, use_container_width=True)
 
@@ -366,12 +353,4 @@ else:
 st.header("🧱 Representación reducida (PCA + MCA)")
 try:
     X_reduced = np.hstack((X_pca_k, X_mca_used))
-    st.success(f"Dimensionalidad final: {X_reduced.shape}  (PCA={k}, MCA={d})")
-    preview_cols = [f"PCA_{i+1}" for i in range(X_pca_k.shape[1])] + [f"MCA_{i+1}" for i in range(X_mca_used.shape[1])]
-    preview_df = pd.DataFrame(X_reduced, columns=preview_cols)
-    st.dataframe(preview_df.head())
-except Exception as e:
-    st.error("No fue posible concatenar las representaciones reducidas.")
-    st.exception(e)
-
-st.caption("© Bioestadística — Demo PCA/MCA con Streamlit")
+    st.success(f
