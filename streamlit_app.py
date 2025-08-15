@@ -267,73 +267,77 @@ if len(cat_cols_mca) >= 2:
         ax4.grid(True)
         st.pyplot(fig4, clear_figure=True)
 
-        # ---------- Contribuciones ----------
-        # Coordenadas de columnas (categorías)
-# ---------- Contribuciones (parser robusto de etiquetas) ----------
-coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
-coords_sq = coords ** 2
-contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
+# ========= Sección MCA (mejorada y robusta) =========
+st.header("🔸 MCA (variables categóricas)")
+if len(cat_cols_mca) >= 2:
+    try:
+        import prince, altair as alt
 
-# --- función para partir etiquetas de prince ---
-def split_label(label: str, known_vars: list[str]):
-    label = str(label)
-    # separadores más comunes en prince/one-hot
-    for sep in ["__", "=", ":", "|"]:
-        if sep in label:
-            a, b = label.split(sep, 1)
-            return a, b
-    # caso con "_" → usa prefijo solo si es una variable conocida
-    if "_" in label:
-        pref, suf = label.split("_", 1)
-        if pref in known_vars:
-            return pref, suf
-    # por defecto: todo es 'variable' y no hay categoría explícita
-    return label, ""
+        X_cat = df_view[cat_cols_mca].astype(str)
 
-# --- Series con contribución por etiqueta (categoría/level) ---
-pct_by_label = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100)
-labels = pct_by_label.index.tolist()
+        # Ajuste de MCA
+        max_components = max(2, min(15, len(cat_cols_mca) - 1))
+        mca_model = prince.MCA(n_components=max_components, random_state=42).fit(X_cat)
+        X_mca_all = mca_model.transform(X_cat)
 
-# parseo de todas las etiquetas
-vars_parsed, cats_parsed = [], []
-for lab in labels:
-    v, c = split_label(lab, cat_cols_mca)
-    vars_parsed.append(v)
-    cats_parsed.append(c)
+        # Varianza acumulada
+        eig = mca_model.eigenvalues_
+        eig_vals = np.array(eig.values if hasattr(eig, "values") else eig)
+        var_exp = eig_vals / eig_vals.sum()
+        cum_var = np.cumsum(var_exp)
+        d = int(np.argmax(cum_var >= variance_threshold) + 1)
+        st.write(f"Dimensiones para ≥{int(variance_threshold*100)}% varianza explicada: **{d}**")
 
-# DataFrame de categorías (niveles individuales)
-df_cat = (
-    pd.DataFrame({
-        "variable": vars_parsed,
-        "categoria": cats_parsed,
-        "pct": pct_by_label.values
-    })
-    .sort_values("pct", ascending=False)
-    .reset_index(drop=True)
-)
+        # Curva varianza acumulada
+        fig4, ax4 = plt.subplots(figsize=(6, 4))
+        ax4.plot(range(1, len(cum_var)+1), cum_var, marker="o", linestyle="--")
+        ax4.axhline(y=variance_threshold)
+        ax4.set_xlabel("Dimensiones"); ax4.set_ylabel("Varianza acumulada")
+        ax4.set_title("MCA - Varianza acumulada"); ax4.grid(True)
+        st.pyplot(fig4, clear_figure=True)
 
-# DataFrame de variables (agrupado) usando el mismo parser
-contrib_var_pct = (
-    df_cat.groupby("variable")["pct"].sum().sort_values(ascending=False)
-)
-df_var = contrib_var_pct.rename("pct").reset_index()
-        # a) AGRUPADO POR VARIABLE
-        contrib_var = contrib.groupby(contrib.index.str.split("__").str[0]).sum().sum(axis=1)
-        contrib_var_pct = (contrib_var / contrib_var.sum() * 100).sort_values(ascending=False)
-        df_var = contrib_var_pct.reset_index()
-        df_var.columns = ["variable", "pct"]
+        # ---------- Contribuciones (parser robusto de etiquetas) ----------
+        coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
+        coords_sq = coords ** 2
+        contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
 
-        # b) CATEGORÍAS (levels) individuales
-        contrib_cat_pct = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100).sort_values(ascending=False)
-        df_cat = contrib_cat_pct.reset_index()
-        split = df_cat["index"].str.split("__", n=1, expand=True)
-        df_cat["variable"] = split[0]
-        df_cat["categoria"] = split[1].fillna("")
-        df_cat = df_cat.drop(columns=["index"]).rename(columns={"pct": "pct"})
+        def split_label(label: str, known_vars: list[str]):
+            label = str(label)
+            for sep in ["__", "=", ":", "|"]:
+                if sep in label:
+                    a, b = label.split(sep, 1)
+                    return a, b
+            if "_" in label:
+                pref, suf = label.split("_", 1)
+                if pref in known_vars:
+                    return pref, suf
+            return label, ""
+
+        pct_by_label = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100)
+        labels = pct_by_label.index.tolist()
+
+        vars_parsed, cats_parsed = [], []
+        for lab in labels:
+            v, c = split_label(lab, cat_cols_mca)
+            vars_parsed.append(v); cats_parsed.append(c)
+
+        # DataFrame de categorías (niveles individuales)
+        df_cat = (
+            pd.DataFrame({"variable": vars_parsed, "categoria": cats_parsed, "pct": pct_by_label.values})
+            .sort_values("pct", ascending=False)
+            .reset_index(drop=True)
+        )
+
+        # DataFrame de variables (agrupado)
+        df_var = (
+            df_cat.groupby("variable", as_index=False)["pct"].sum()
+            .sort_values("pct", ascending=False)
+            .reset_index(drop=True)
+        )
 
         st.subheader("📈 Contribuciones a Dim 1 y 2")
         mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
-        max_items = 60  # límite superior razonable
+        max_items = 60
         top_n = st.slider("Top N a mostrar", 5, min(max_items, max(len(df_var), len(df_cat))), 15)
 
         if mode == "Variables (agrupado)":
@@ -344,10 +348,7 @@ df_var = contrib_var_pct.rename("pct").reset_index()
                 df_show = pd.concat([top, otros], ignore_index=True)
             else:
                 df_show = top
-
-            # Altura dinámica para evitar sobreposición
-            height = int(20 * len(df_show) + 120)
-
+            height = int(22 * len(df_show) + 120)
             chart = (
                 alt.Chart(df_show)
                 .mark_bar()
@@ -364,8 +365,7 @@ df_var = contrib_var_pct.rename("pct").reset_index()
 
         else:  # "Categorías (niveles)"
             df_plot = df_cat.copy().head(top_n)
-            height = int(20 * len(df_plot) + 140)
-
+            height = int(22 * len(df_plot) + 140)
             chart = (
                 alt.Chart(df_plot)
                 .mark_bar()
@@ -373,11 +373,9 @@ df_var = contrib_var_pct.rename("pct").reset_index()
                     x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
                     y=alt.Y("categoria:N", sort="-x", title=None),
                     color=alt.Color("variable:N", legend=alt.Legend(title="Variable", orient="right")),
-                    tooltip=[
-                        alt.Tooltip("variable:N", title="Variable"),
-                        alt.Tooltip("categoria:N", title="Categoría"),
-                        alt.Tooltip("pct:Q", format=".2f", title="Contribución %")
-                    ],
+                    tooltip=[alt.Tooltip("variable:N", title="Variable"),
+                             alt.Tooltip("categoria:N", title="Categoría"),
+                             alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
                 )
                 .properties(height=height, use_container_width=True,
                             title="MCA — Contribución por categoría (Top N)")
@@ -395,17 +393,3 @@ else:
     st.warning("No hay suficientes columnas categóricas para MCA (se requieren ≥ 2).")
     X_mca_used = np.empty((len(df_view), 0))
     d = 0
-
-# ========= Concatenación final opcional =========
-st.header("🧱 Representación reducida (PCA + MCA)")
-try:
-    X_reduced = np.hstack((X_pca_k, X_mca_used))
-    st.success(f"Dimensionalidad final: {X_reduced.shape}  (PCA={k}, MCA={d})")
-    preview_cols = [f"PCA_{i+1}" for i in range(X_pca_k.shape[1])] + [f"MCA_{i+1}" for i in range(X_mca_used.shape[1])]
-    preview_df = pd.DataFrame(X_reduced, columns=preview_cols)
-    st.dataframe(preview_df.head())
-except Exception as e:
-    st.error("No fue posible concatenar las representaciones reducidas.")
-    st.exception(e)
-
-st.caption("© Bioestadística — Demo PCA/MCA con Streamlit")
