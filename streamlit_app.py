@@ -9,6 +9,29 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
+# ========= Carga de datos (robusta, sin 'or' con DataFrames) =========
+df = None
+
+if uploaded is not None:
+    # UploadedFile se lee directo con pandas
+    try:
+        df = pd.read_csv(uploaded)
+    except Exception as e:
+        st.error(f"❌ No pude leer el CSV subido: {e}")
+        st.stop()
+else:
+    local_df = load_local_csv("diabetic_data.csv")
+    if local_df is not None:
+        df = local_df
+    else:
+        df = load_from_uci()
+
+# Validación final
+if not isinstance(df, pd.DataFrame) or df.empty:
+    st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
+    st.stop()
+
+
 # ========= Configuración de página =========
 st.set_page_config(page_title="Diabetes 130 — PCA & MCA", layout="wide")
 st.title("📊 Diabetes 130-US Hospitals — PCA & MCA (Streamlit)")
@@ -104,7 +127,7 @@ sample_size = st.sidebar.slider("Tamaño de muestra", 200, 20000, 3000, 200)
 variance_threshold = st.sidebar.slider("Umbral de varianza acumulada (%)", 70, 95, 85, 1) / 100.0
 
 # ========= Carga de datos =========
-df = pd.read_csv(uploaded) if uploaded is not None else (load_local_csv("diabetic_data.csv") or load_from_uci())
+
 if df is None or df.empty:
     st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
     st.stop()
