@@ -133,6 +133,35 @@ if target:
     st.write("Distribución de **readmitted**:")
     st.write(df[target].value_counts())
 
+import streamlit as st
+
+# --- Validaciones de datos ---
+if df is None or df.empty:
+    st.error("No se pudo cargar datos: df está vacío. Sube un CSV o verifica ucimlrepo.")
+    st.stop()
+
+st.write("Shape:", df.shape)
+st.write("Columnas:", list(df.columns)[:30])  # breve vista
+
+num_cols_pca = [c for c in [
+    "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
+    "number_outpatient","number_emergency","number_inpatient","number_diagnoses"
+] if c in df.columns]
+
+cat_cols_mca = [c for c in [
+    "race","gender","age","weight","payer_code","medical_specialty","diag_1","diag_2","diag_3",
+    "max_glu_serum","A1Cresult","metformin","repaglinide","nateglinide","chlorpropamide",
+    "glimepiride","acetohexamide","glipizide","glyburide","tolbutamide","pioglitazone",
+    "rosiglitazone","acarbose","miglitol","troglitazone","tolazamide","examide","citoglipton",
+    "insulin","glyburide-metformin","glipizide-metformin","glimepiride-pioglitazone",
+    "metformin-rosiglitazone","metformin-pioglitazone","change","diabetesMed",
+    "admission_type_id","discharge_disposition_id","admission_source_id"
+] if c in df.columns]
+
+if len(num_cols_pca) < 2 and len(cat_cols_mca) < 2:
+    st.error("No hay suficientes columnas para PCA/MCA. Revisa nombres de columnas del dataset.")
+    st.stop()
+
 # ====== PCA ======
 st.header("🔹 PCA en variables numéricas")
 if len(num_cols_pca) >= 2:
