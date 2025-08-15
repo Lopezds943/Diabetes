@@ -45,7 +45,6 @@ def load_from_uci():
 
 def map_code_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Aplica mapeos de códigos a texto en 3 columnas, si existen."""
-    # Asegura tipo string
     for col in ["admission_type_id", "discharge_disposition_id", "admission_source_id"]:
         if col in df.columns:
             df[col] = df[col].astype(str)
@@ -78,7 +77,6 @@ def map_code_columns(df: pd.DataFrame) -> pd.DataFrame:
         df["discharge_disposition_id"] = df["discharge_disposition_id"].map(lambda x: map_discharge_disposition.get(str(x), "Desconocido"))
     if "admission_source_id" in df.columns:
         df["admission_source_id"] = df["admission_source_id"].map(lambda x: map_admission_source.get(str(x), "Desconocido"))
-
     return df
 
 def numeric_cols_present(df):
@@ -101,21 +99,12 @@ def categorical_cols_present(df):
 # ========= Sidebar: carga y opciones =========
 st.sidebar.header("⚙️ Opciones")
 uploaded = st.sidebar.file_uploader("Sube tu `diabetic_data.csv`", type=["csv"])
-
 sample_on = st.sidebar.checkbox("Usar muestra para visualizar más rápido", value=True)
-sample_size = st.sidebar.slider("Tamaño de muestra", min_value=200, max_value=20000, value=3000, step=200)
-
+sample_size = st.sidebar.slider("Tamaño de muestra", 200, 20000, 3000, 200)
 variance_threshold = st.sidebar.slider("Umbral de varianza acumulada (%)", 70, 95, 85, 1) / 100.0
 
 # ========= Carga de datos =========
-df = None
-if uploaded is not None:
-    df = pd.read_csv(uploaded)
-else:
-    df = load_local_csv("diabetic_data.csv")
-    if df is None:
-        df = load_from_uci()
-
+df = pd.read_csv(uploaded) if uploaded is not None else (load_local_csv("diabetic_data.csv") or load_from_uci())
 if df is None or df.empty:
     st.error("❌ No se pudieron cargar datos. Sube un CSV o permite la carga desde UCI.")
     st.stop()
@@ -125,8 +114,7 @@ df = df.replace(["None", "?"], pd.NA)
 df = map_code_columns(df)
 
 # Rellena categóricas faltantes
-cat_all = df.select_dtypes(include="object").columns.tolist()
-for c in cat_all:
+for c in df.select_dtypes(include="object").columns:
     if df[c].isna().any():
         df[c] = df[c].fillna("Sin_info")
 
@@ -140,11 +128,9 @@ st.subheader("👀 Vista rápida de datos")
 st.write("Shape:", df.shape)
 st.dataframe(df.head())
 
+df_view = df.sample(sample_size, random_state=42) if (sample_on and len(df) > sample_size) else df.copy()
 if sample_on and len(df) > sample_size:
-    df_view = df.sample(sample_size, random_state=42)
     st.caption(f"Mostrando muestra aleatoria de {len(df_view)} filas (de {len(df)}).")
-else:
-    df_view = df.copy()
 
 # Target (si existe)
 target = "readmitted" if "readmitted" in df_view.columns else None
@@ -164,121 +150,16 @@ if len(num_cols_pca) < 2 and len(cat_cols_mca) < 2:
     st.error("❌ No hay suficientes columnas válidas para PCA/MCA. Revisa los nombres de columnas del dataset.")
     st.stop()
 
-# ========= Sección PCA =========
+# ========= PCA =========
 st.header("🔹 PCA (variables numéricas)")
 if len(num_cols_pca) >= 2:
     try:
-        # Imputación + escalado
         X_num = df_view[num_cols_pca].copy()
         imputer = SimpleImputer(strategy="median")
         X_num_imp = imputer.fit_transform(X_num)
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_num_imp)
 
-        # PCA completo para curva de varianza
-        pca_full = PCA()
-        X_pca_full = pca_full.fit_transform(X_scaled)
-        explained_cum = np.cumsum(pca_full.explained_variance_ratio_)
-        k = int(np.argmax(explained_cum >= variance_threshold) + 1)
-
-        st.write(f"Componentes para ≥{int(variance_threshold*100)}% varianza explicada: **{k}**")
-
-        # Gráfico de varianza acumulada
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        ax1.plot(range(1, len(explained_cum)+1), explained_cum, marker="o", linestyle="--")
-        ax1.axhline(y=variance_threshold)
-        ax1.set_xlabel("Componentes")
-        ax1.set_ylabel("Varianza acumulada")
-        ax1.set_title("PCA - Varianza acumulada")
-        ax1.grid(True)
-        st.pyplot(fig1, clear_figure=True)
-
-        # Scatter PC1 vs PC2
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        if target:
-            # Colorea por target (como texto para evitar problemas)
-            ax2.scatter(X_pca_full[:, 0], X_pca_full[:, 1], c=pd.factorize(df_view[target].astype(str))[0], alpha=0.6)
-            ax2.set_title("PCA - PC1 vs PC2 (coloreado por 'readmitted')")
-        else:
-            ax2.scatter(X_pca_full[:, 0], X_pca_full[:, 1], alpha=0.6)
-            ax2.set_title("PCA - PC1 vs PC2")
-        ax2.set_xlabel("PC1")
-        ax2.set_ylabel("PC2")
-        st.pyplot(fig2, clear_figure=True)
-
-        # Heatmap de loadings (primeras PCs)
-        loadings = pd.DataFrame(
-            pca_full.components_.T,
-            columns=[f"PC{i+1}" for i in range(pca_full.n_components_)],
-            index=num_cols_pca
-        )
-        n_show = min(10, loadings.shape[1])
-        fig3, ax3 = plt.subplots(figsize=(10, 6))
-        im = ax3.imshow(loadings.iloc[:, :n_show], aspect="auto", cmap="coolwarm", vmin=-np.max(np.abs(loadings.values)), vmax=np.max(np.abs(loadings.values)))
-        ax3.set_xticks(range(n_show))
-        ax3.set_xticklabels([f"PC{i+1}" for i in range(n_show)], rotation=45, ha="right")
-        ax3.set_yticks(range(len(num_cols_pca)))
-        ax3.set_yticklabels(num_cols_pca)
-        ax3.set_title("PCA - Loadings (primeras PCs)")
-        fig3.colorbar(im, ax=ax3, fraction=0.046, pad=0.04)
-        st.pyplot(fig3, clear_figure=True)
-
-        # PCA reducido a k componentes
-        pca_k = PCA(n_components=k)
-        X_pca_k = pca_k.fit_transform(X_scaled)
-
-    except Exception as e:
-        st.error("⚠️ Falló la sección de PCA.")
-        st.exception(e)
-        st.stop()
-else:
-    st.warning("No hay suficientes columnas numéricas para PCA (se requieren ≥ 2).")
-    X_pca_k = np.empty((len(df_view), 0))
-    k = 0
-
-# ========= Sección MCA (mejorada) =========
-st.header("🔸 MCA (variables categóricas)")
-if len(cat_cols_mca) >= 2:
-    try:
-        import prince, altair as alt
-
-        X_cat = df_view[cat_cols_mca].astype(str)
-
-        # Ajuste de MCA
-        max_components = max(2, min(15, len(cat_cols_mca) - 1))
-        mca_model = prince.MCA(n_components=max_components, random_state=42).fit(X_cat)
-        X_mca_all = mca_model.transform(X_cat)
-
-        # Varianza acumulada
-        eig = mca_model.eigenvalues_
-        eig_vals = np.array(eig.values if hasattr(eig, "values") else eig)
-        var_exp = eig_vals / eig_vals.sum()
-        cum_var = np.cumsum(var_exp)
-        d = int(np.argmax(cum_var >= variance_threshold) + 1)
-        st.write(f"Dimensiones para ≥{int(variance_threshold*100)}% varianza explicada: **{d}**")
-
-        # Curva de varianza acumulada (matplotlib para mantener estilo)
-        fig4, ax4 = plt.subplots(figsize=(6, 4))
-        ax4.plot(range(1, len(cum_var)+1), cum_var, marker="o", linestyle="--")
-        ax4.axhline(y=variance_threshold)
-        ax4.set_xlabel("Dimensiones")
-        ax4.set_ylabel("Varianza acumulada")
-        ax4.set_title("MCA - Varianza acumulada")
-        ax4.grid(True)
-        st.pyplot(fig4, clear_figure=True)
-
-# ========= Sección PCA =========
-st.header("🔹 PCA (variables numéricas)")
-if len(num_cols_pca) >= 2:
-    try:
-        # Imputación + escalado
-        X_num = df_view[num_cols_pca].copy()
-        imputer = SimpleImputer(strategy="median")
-        X_num_imp = imputer.fit_transform(X_num)
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X_num_imp)
-
-        # PCA completo
         pca_full = PCA()
         X_pca_full = pca_full.fit_transform(X_scaled)
         explained_cum = np.cumsum(pca_full.explained_variance_ratio_)
@@ -293,9 +174,183 @@ if len(num_cols_pca) >= 2:
         st.pyplot(fig1, clear_figure=True)
 
         fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.scatter(X_pca_full[:, 0], X_pca_full[:, 1], alpha=0.6)
-        ax2.set_xlabel("PC1"); ax2.set_ylabel("PC2"); ax2.set_title("PCA - PC1 vs PC2")
+        if target:
+            ax2.scatter(X_pca_full[:, 0], X_pca_full[:, 1], c=pd.factorize(df_view[target].astype(str))[0], alpha=0.6)
+            ax2.set_title("PCA - PC1 vs PC2 (coloreado por 'readmitted')")
+        else:
+            ax2.scatter(X_pca_full[:, 0], X_pca_full[:, 1], alpha=0.6)
+            ax2.set_title("PCA - PC1 vs PC2")
+        ax2.set_xlabel("PC1"); ax2.set_ylabel("PC2")
         st.pyplot(fig2, clear_figure=True)
 
-        # PCA reducido
-        pca_k = PCA(n_compon
+        # Loadings (primeras PCs)
+        loadings = pd.DataFrame(
+            pca_full.components_.T,
+            columns=[f"PC{i+1}" for i in range(pca_full.n_components_)],
+            index=num_cols_pca
+        )
+        n_show = min(10, loadings.shape[1])
+        fig3, ax3 = plt.subplots(figsize=(10, 6))
+        im = ax3.imshow(
+            loadings.iloc[:, :n_show], aspect="auto",
+            cmap="coolwarm",
+            vmin=-np.max(np.abs(loadings.values)), vmax=np.max(np.abs(loadings.values))
+        )
+        ax3.set_xticks(range(n_show)); ax3.set_xticklabels([f"PC{i+1}" for i in range(n_show)], rotation=45, ha="right")
+        ax3.set_yticks(range(len(num_cols_pca))); ax3.set_yticklabels(num_cols_pca)
+        ax3.set_title("PCA - Loadings (primeras PCs)")
+        fig3.colorbar(im, ax=ax3, fraction=0.046, pad=0.04)
+        st.pyplot(fig3, clear_figure=True)
+
+        pca_k = PCA(n_components=k)
+        X_pca_k = pca_k.fit_transform(X_scaled)
+
+    except Exception as e:
+        st.error("⚠️ Falló la sección de PCA.")
+        st.exception(e)
+        X_pca_k = np.empty((len(df_view), 0))
+        k = 0
+else:
+    st.warning("No hay suficientes columnas numéricas para PCA (se requieren ≥ 2).")
+    X_pca_k = np.empty((len(df_view), 0))
+    k = 0
+
+# ========= MCA (mejorada y robusta) =========
+st.header("🔸 MCA (variables categóricas)")
+if len(cat_cols_mca) >= 2:
+    try:
+        import prince, altair as alt
+
+        X_cat = df_view[cat_cols_mca].astype(str)
+
+        max_components = max(2, min(15, len(cat_cols_mca) - 1))
+        mca_model = prince.MCA(n_components=max_components, random_state=42).fit(X_cat)
+        X_mca_all = mca_model.transform(X_cat)
+
+        eig = mca_model.eigenvalues_
+        eig_vals = np.array(eig.values if hasattr(eig, "values") else eig)
+        var_exp = eig_vals / eig_vals.sum()
+        cum_var = np.cumsum(var_exp)
+        d = int(np.argmax(cum_var >= variance_threshold) + 1)
+        st.write(f"Dimensiones para ≥{int(variance_threshold*100)}% varianza explicada: **{d}**")
+
+        fig4, ax4 = plt.subplots(figsize=(6, 4))
+        ax4.plot(range(1, len(cum_var)+1), cum_var, marker="o", linestyle="--")
+        ax4.axhline(y=variance_threshold); ax4.grid(True)
+        ax4.set_xlabel("Dimensiones"); ax4.set_ylabel("Varianza acumulada"); ax4.set_title("MCA - Varianza acumulada")
+        st.pyplot(fig4, clear_figure=True)
+
+        # ---------- Contribuciones (parser robusto de etiquetas) ----------
+        coords = mca_model.column_coordinates(X_cat).iloc[:, :2]
+        coords_sq = coords ** 2
+        contrib = coords_sq.div(coords_sq.sum(axis=0), axis=1)  # contrib por categoría a Dim1 y Dim2
+
+        def split_label(label: str, known_vars: list[str]):
+            label = str(label)
+            for sep in ["__", "=", ":", "|"]:
+                if sep in label:
+                    a, b = label.split(sep, 1)
+                    return a, b
+            if "_" in label:
+                pref, suf = label.split("_", 1)
+                if pref in known_vars:
+                    return pref, suf
+            return label, ""
+
+        pct_by_label = (contrib.sum(axis=1) / contrib.sum(axis=1).sum() * 100)
+        labels = pct_by_label.index.tolist()
+
+        vars_parsed, cats_parsed = [], []
+        for lab in labels:
+            v, c = split_label(lab, cat_cols_mca)
+            vars_parsed.append(v); cats_parsed.append(c)
+
+        # Categorías (niveles)
+        df_cat = (
+            pd.DataFrame({"variable": vars_parsed, "categoria": cats_parsed, "pct": pct_by_label.values})
+            .sort_values("pct", ascending=False)
+            .reset_index(drop=True)
+        )
+        # Variables (agrupado)
+        df_var = (
+            df_cat.groupby("variable", as_index=False)["pct"].sum()
+            .sort_values("pct", ascending=False)
+            .reset_index(drop=True)
+        )
+
+        st.subheader("📈 Contribuciones a Dim 1 y 2")
+        mode = st.radio("Vista", ["Variables (agrupado)", "Categorías (niveles)"], horizontal=True)
+        max_items = 60
+        max_count = max(1, min(max_items, max(len(df_var), len(df_cat))))
+        top_n = st.slider("Top N a mostrar", 5, max(5, max_count), min(15, max_count))
+
+        if mode == "Variables (agrupado)":
+            df_plot = df_var.copy()
+            top = df_plot.head(top_n)
+            if len(df_plot) > top_n:
+                otros = pd.DataFrame([{"variable": "Otros", "pct": df_plot["pct"].iloc[top_n:].sum()}])
+                df_show = pd.concat([top, otros], ignore_index=True)
+            else:
+                df_show = top
+            height = int(22 * len(df_show) + 120)
+
+            chart = (
+                alt.Chart(df_show)
+                .mark_bar()
+                .encode(
+                    x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
+                    y=alt.Y("variable:N", sort="-x", title=None),
+                    tooltip=[alt.Tooltip("variable:N", title="Variable"),
+                             alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
+                )
+                .properties(height=height, use_container_width=True,
+                            title="MCA — Contribución por variable (Top N + Otros)")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        else:
+            df_plot = df_cat.copy().head(top_n)
+            height = int(22 * len(df_plot) + 140)
+
+            chart = (
+                alt.Chart(df_plot)
+                .mark_bar()
+                .encode(
+                    x=alt.X("pct:Q", title="Contribución (%) a Dim 1 y 2"),
+                    y=alt.Y("categoria:N", sort="-x", title=None),
+                    color=alt.Color("variable:N", legend=alt.Legend(title="Variable", orient="right")),
+                    tooltip=[alt.Tooltip("variable:N", title="Variable"),
+                             alt.Tooltip("categoria:N", title="Categoría"),
+                             alt.Tooltip("pct:Q", format=".2f", title="Contribución %")]
+                )
+                .properties(height=height, use_container_width=True,
+                            title="MCA — Contribución por categoría (Top N)")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        # Reduce a d dimensiones para la concatenación final
+        X_mca_used = X_mca_all.iloc[:, :d].values if hasattr(X_mca_all, "iloc") else X_mca_all[:, :d]
+
+    except Exception as e:
+        st.error("⚠️ Falló la sección de MCA.")
+        st.exception(e)
+        X_mca_used = np.empty((len(df_view), 0))
+        d = 0
+else:
+    st.warning("No hay suficientes columnas categóricas para MCA (se requieren ≥ 2).")
+    X_mca_used = np.empty((len(df_view), 0))
+    d = 0
+
+# ========= Concatenación final =========
+st.header("🧱 Representación reducida (PCA + MCA)")
+try:
+    X_reduced = np.hstack((X_pca_k, X_mca_used))
+    st.success(f"Dimensionalidad final: {X_reduced.shape}  (PCA={k}, MCA={d})")
+    preview_cols = [f"PCA_{i+1}" for i in range(X_pca_k.shape[1])] + [f"MCA_{i+1}" for i in range(X_mca_used.shape[1])]
+    preview_df = pd.DataFrame(X_reduced, columns=preview_cols)
+    st.dataframe(preview_df.head())
+except Exception as e:
+    st.error("No fue posible concatenar las representaciones reducidas.")
+    st.exception(e)
+
+st.caption("© Bioestadística — Demo PCA/MCA con Streamlit")
