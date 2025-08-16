@@ -22,5 +22,12 @@ y = diabetes_130_us_hospitals_for_years_1999_2008.data.targets
 # Combinar en un solo DataFrame
 df = pd.concat([X, y], axis=1)
 
+# Remplazar los ? por np.nan
+df = df.replace('?', np.nan)
+
+# Quitar espacios accidentales y uniformar mayúsculas en columnas tipo string
+for c in df.select_dtypes(include='object').columns:
+    df[c] = df[c].astype(str).str.strip()
+
 # Mostrar primeras filas
 df
