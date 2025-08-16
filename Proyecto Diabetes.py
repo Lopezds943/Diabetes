@@ -12,6 +12,20 @@ from matplotlib import pyplot
 from sklearn.impute import SimpleImputer
 from ucimlrepo import fetch_ucirepo
 
+st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
+
+st.markdown("""
+Este dataset proviene del repositorio **UCI Machine Learning** y contiene más de **100 mil registros** 
+de pacientes hospitalizados en Estados Unidos entre 1999 y 2008 con diagnóstico de diabetes.  
+
+Incluye información demográfica (edad, raza, género), clínica (diagnósticos ICD-9, 
+resultados de laboratorio, medicamentos), y administrativa (tipo de admisión, alta hospitalaria).  
+
+El objetivo principal del análisis es **explorar patrones asociados al reingreso hospitalario** 
+de pacientes diabéticos y aplicar técnicas de **bioestadística multivariada** 
+como *PCA* (Análisis de Componentes Principales) y *MCA* (Análisis de Correspondencias Múltiples).
+""")
+
 ##############################################################################
 # Consolidar Dataset
 ##############################################################################
