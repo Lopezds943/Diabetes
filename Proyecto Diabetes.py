@@ -107,6 +107,16 @@ if 'readmitted' in df.columns:
     df['readmitted_any'] = np.where(df['readmitted'].isin(['<30','>30']), 1, 0)
 
 
+# Convertir categorías en ordinales (cuando tienen un orden natural).
+if 'A1Cresult' in df.columns:
+    map_a1c = {'None': np.nan, 'Norm': 0, '>7': 1, '>8': 2}
+    df['A1Cresult_ord'] = df['A1Cresult'].map(map_a1c)
+
+if 'max_glu_serum' in df.columns:
+    map_glu = {'None': np.nan, 'Norm': 0, '>200': 1, '>300': 2}
+    df['max_glu_serum_ord'] = df['max_glu_serum'].map(map_glu)
+
+
 # Mostrar primeras filas
 df
 
