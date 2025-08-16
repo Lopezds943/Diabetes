@@ -99,6 +99,13 @@ for c in num_maybe:
 for c in [col for col in num_maybe if col in df.columns]:
     df.loc[df[c] < 0, c] = np.nan
 
+# Columna objetivo
+if 'readmitted' in df.columns:
+    # Normalizamos las palabras de la columna readmitted
+    df['readmitted'] = df['readmitted'].str.upper()
+    # Creacion de columna de readmision binaria
+    df['readmitted_any'] = np.where(df['readmitted'].isin(['<30','>30']), 1, 0)
+
 
 # Mostrar primeras filas
 df
