@@ -27,6 +27,50 @@ de pacientes diabéticos y aplicar técnicas de **bioestadística multivariada**
 como *PCA* (Análisis de Componentes Principales) y *MCA* (Análisis de Correspondencias Múltiples).
 """)
 
+st.subheader("📑 Diccionario de variables principales")
+
+st.markdown("""
+### Identificación y demografía
+- **encounter_id**: Identificador único del encuentro hospitalario.  
+- **patient_nbr**: Identificador único de cada paciente.  
+- **race**: Raza del paciente (Caucasian, AfricanAmerican, Asian, etc.).  
+- **gender**: Sexo del paciente (Male, Female).  
+- **age**: Grupo de edad en intervalos de 10 años (ej. [50-60)).  
+
+### Información administrativa
+- **admission_type_id**: Tipo de admisión (urgencias, electiva, etc.).  
+- **discharge_disposition_id**: Tipo de alta (hogar, transferencia, fallecimiento, etc.).  
+- **admission_source_id**: Fuente de admisión (referencia médica, urgencias, etc.).  
+- **time_in_hospital**: Días de estancia en el hospital.  
+- **payer_code**: Tipo de asegurador (Medicare, BlueCross, etc.) [eliminada por alta cantidad de faltantes].  
+- **medical_specialty**: Especialidad médica del médico tratante.  
+
+### Información clínica
+- **num_lab_procedures**: Número de procedimientos de laboratorio realizados.  
+- **num_procedures**: Número de procedimientos médicos no relacionados con laboratorio.  
+- **num_medications**: Número de medicamentos administrados durante la estancia.  
+- **number_outpatient**: Número de visitas ambulatorias previas.  
+- **number_emergency**: Número de visitas a urgencias previas.  
+- **number_inpatient**: Número de hospitalizaciones previas.  
+- **number_diagnoses**: Número de diagnósticos registrados en el encuentro.  
+
+### Diagnósticos
+- **diag_1, diag_2, diag_3**: Diagnósticos principales y secundarios (códigos ICD-9).  
+
+### Resultados clínicos
+- **A1Cresult**: Resultado de hemoglobina glicosilada A1C (`None`, `Norm`, `>7`, `>8`).  
+- **max_glu_serum**: Nivel máximo de glucosa en suero (`None`, `Norm`, `>200`, `>300`).  
+
+### Tratamiento farmacológico
+- **metformin, insulin, glipizide, etc.**: Variables de medicamentos (valores: `No`, `Steady`, `Up`, `Down`).  
+- **change**: Indica si hubo cambio en la medicación (`Yes`, `No`).  
+- **diabetesMed**: Indica si el paciente recibió medicación para diabetes (`Yes`, `No`).  
+
+### Variable objetivo
+- **readmitted**: Indica si el paciente fue readmitido en los 30 días siguientes al alta.  
+   - Valores: `NO`, `>30` (después de 30 días), `<30` (dentro de 30 días).  
+""")
+
 ##############################################################################
 # Consolidar Dataset
 ##############################################################################
