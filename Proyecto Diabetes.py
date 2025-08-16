@@ -59,5 +59,9 @@ if {'patient_nbr', 'encounter_id'}.issubset(df.columns):
     df = df.sort_values(['patient_nbr','encounter_id'], ascending=[True, True])
     df = df.drop_duplicates(subset='patient_nbr', keep='first')
 
+# Género inválido (el dataset trae 'Unknown/Invalid')
+if 'gender' in df.columns:
+    df['gender'] = df['gender'].replace({'Unknown/Invalid': np.nan})
+
 # Mostrar primeras filas
 df
