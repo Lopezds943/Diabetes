@@ -23,4 +23,4 @@ y = diabetes_130_us_hospitals_for_years_1999_2008.data.targets
 df = pd.concat([X, y], axis=1)
 
 # Mostrar primeras filas
-df.head()
+df
