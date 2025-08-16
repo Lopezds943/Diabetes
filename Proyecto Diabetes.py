@@ -80,12 +80,9 @@ Durante el proceso de preparación de los datos se aplicaron dos criterios princ
 👉 La eliminación de estas variables asegura que el análisis no se vea afectado por columnas sin variabilidad o con demasiados valores faltantes.
 
 ### 2. Eliminación de registros específicos
-- En la variable **`gender`** se identificaron algunos registros con el valor `"Unknown/Invalid"`.  
-  Estos fueron eliminados ya que no representan un sexo válido y constituyen menos del 1% de los datos.  
-- En la variable **`discharge_disposition_id`** se excluyeron los registros que corresponden a **fallecimiento o cuidado paliativo (códigos 11, 19, 20, 21)**.  
-  Estos pacientes **no pueden reingresar al hospital**, por lo que su inclusión distorsionaría el análisis del objetivo principal: **estudiar el reingreso hospitalario**.
+Para el análisis de rehospitalización en pacientes con diabetes, cada fila del dataset corresponde a un **encuentro hospitalario** (`encounter_id`) y un mismo paciente (`patient_nbr`) puede aparecer varias veces.
 
----
+**Decisión metodológica:** conservar **solo el primer encuentro** de cada paciente.
 
-En conclusión, estas decisiones de limpieza buscan **mejorar la calidad del dataset**, evitando ruido estadístico y garantizando que los análisis de **reingresos en pacientes con diabetes** se realicen sobre información válida, consistente y relevante.
-""")
+**Justificación estadística y clínica**
+- **Independencia de observaciones:** múltiples filas del mismo paciente generan dependencia intrapaciente y sesgan los contrastes.""")
