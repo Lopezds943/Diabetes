@@ -65,3 +65,27 @@ if 'gender' in df.columns:
 
 # Mostrar primeras filas
 df
+
+st.subheader("🧹 Justificación de la limpieza de datos")
+
+st.markdown("""
+Durante el proceso de preparación de los datos se aplicaron dos criterios principales de limpieza:
+
+### 1. Eliminación de variables
+- **`examide` y `citoglipton`**: presentan **varianza nula**, ya que todos los registros tienen el mismo valor ("No").  
+- **`weight`**: más del **95% de los registros están vacíos**, lo que impide su uso en análisis robustos.  
+- **`payer_code`**: aunque contiene información sobre el tipo de asegurador, alrededor del **40% de los valores están ausentes**.  
+  Por esta razón se descartó para garantizar consistencia en los modelos estadísticos.  
+
+👉 La eliminación de estas variables asegura que el análisis no se vea afectado por columnas sin variabilidad o con demasiados valores faltantes.
+
+### 2. Eliminación de registros específicos
+- En la variable **`gender`** se identificaron algunos registros con el valor `"Unknown/Invalid"`.  
+  Estos fueron eliminados ya que no representan un sexo válido y constituyen menos del 1% de los datos.  
+- En la variable **`discharge_disposition_id`** se excluyeron los registros que corresponden a **fallecimiento o cuidado paliativo (códigos 11, 19, 20, 21)**.  
+  Estos pacientes **no pueden reingresar al hospital**, por lo que su inclusión distorsionaría el análisis del objetivo principal: **estudiar el reingreso hospitalario**.
+
+---
+
+En conclusión, estas decisiones de limpieza buscan **mejorar la calidad del dataset**, evitando ruido estadístico y garantizando que los análisis de **reingresos en pacientes con diabetes** se realicen sobre información válida, consistente y relevante.
+""")
