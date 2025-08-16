@@ -63,9 +63,6 @@ if {'patient_nbr', 'encounter_id'}.issubset(df.columns):
 if 'gender' in df.columns:
     df['gender'] = df['gender'].replace({'Unknown/Invalid': np.nan})
 
-# Mostrar primeras filas
-df
-
 st.subheader("🧹 Justificación de la limpieza de datos")
 
 st.markdown("""
@@ -86,3 +83,23 @@ Para el análisis de rehospitalización en pacientes con diabetes, cada fila del
 
 **Justificación estadística y clínica**
 - **Independencia de observaciones:** múltiples filas del mismo paciente generan dependencia intrapaciente y sesgan los contrastes.""")
+
+# Variables numericas 
+# Convierte a numéricas las que deben serlo (si quedaron como object por NA o parsing)
+num_maybe = [
+    'time_in_hospital','num_lab_procedures','num_procedures','num_medications',
+    'number_outpatient','number_emergency','number_inpatient','number_diagnoses',
+    'admission_type_id','discharge_disposition_id','admission_source_id'
+]
+for c in num_maybe:
+    if c in df.columns:
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+
+# Asegurar no-negatividad en contadores (si algo raro aparece, lo pasamos a NA)
+for c in [col for col in num_maybe if col in df.columns]:
+    df.loc[df[c] < 0, c] = np.nan
+
+
+# Mostrar primeras filas
+df
+
