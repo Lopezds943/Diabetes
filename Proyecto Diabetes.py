@@ -54,5 +54,10 @@ for c in df.select_dtypes(include='object').columns:
 #Duplicados
 df = df.drop_duplicates()
 
+# Solo queremos Conservemos el primer encuentro por paciente
+if {'patient_nbr', 'encounter_id'}.issubset(df.columns):
+    df = df.sort_values(['patient_nbr','encounter_id'], ascending=[True, True])
+    df = df.drop_duplicates(subset='patient_nbr', keep='first')
+
 # Mostrar primeras filas
 df
