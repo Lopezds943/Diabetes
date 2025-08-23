@@ -13,6 +13,8 @@ from sklearn.impute import SimpleImputer
 from ucimlrepo import fetch_ucirepo
 from sklearn.preprocessing import StandardScaler
 import streamlit as st
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
 st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
 
@@ -297,6 +299,25 @@ X_num = df[num_cols].dropna()
 # Escalado para PCA
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_num)
+
+# Ajustar PCA
+pca = PCA(n_components=5)
+X_pca = pca.fit_transform(X_scaled)
+
+# Varianza explicada
+explained_var = pca.explained_variance_ratio_
+
+st.subheader("📉 PCA – Análisis de Componentes Principales")
+
+st.write("Varianza explicada por componente:", explained_var)
+
+# Gráfico Scree Plot
+fig, ax = plt.subplots()
+ax.plot(range(1, len(explained_var)+1), explained_var.cumsum(), marker="o")
+ax.set_xlabel("Número de Componentes")
+ax.set_ylabel("Varianza Acumulada")
+ax.set_title("Scree Plot – PCA")
+st.pyplot(fig)
 
 
 
