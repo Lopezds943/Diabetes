@@ -15,6 +15,8 @@ from sklearn.preprocessing import StandardScaler
 import streamlit as st
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import prince
+
 
 st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
 
@@ -319,6 +321,34 @@ ax.set_ylabel("Varianza Acumulada")
 ax.set_title("Scree Plot – PCA")
 st.pyplot(fig)
 
+# Variables categóricas (ejemplo: raza, sexo, edad, diagnósticos agrupados, medicaciones principales)
+cat_cols = ["race","gender","age","diag_1_group","diag_2_group","diag_3_group","readmitted"]
+cat_cols = [c for c in cat_cols if c in df.columns]
 
+X_cat = df[cat_cols].dropna()
+
+# Ajustar MCA
+mca = prince.MCA(n_components=5, random_state=42)
+mca = mca.fit(X_cat)
+
+# Coordenadas de individuos
+X_mca = mca.transform(X_cat)
+
+st.subheader("📊 MCA – Análisis de Correspondencias Múltiples")
+
+st.write("Inercia explicada por componente:", mca.explained_inertia_)
+
+# Biplot de categorías
+fig, ax = plt.subplots(figsize=(6,6))
+mca.plot_coordinates(
+    X_cat,
+    ax=ax,
+    show_row_points=False,
+    show_column_points=True,
+    column_points_size=30,
+    show_row_labels=False,
+    show_column_labels=True
+)
+st.pyplot(fig)
 
 df
