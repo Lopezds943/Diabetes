@@ -283,6 +283,20 @@ st.write(df.dtypes.head(25))
 # Guardar versión limpia para siguientes fases
 clean_df = df.copy()
 
+# Seleccionar solo variables numéricas (excluyendo IDs y target)
+num_cols = [
+    "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
+    "number_outpatient","number_emergency","number_inpatient","number_diagnoses",
+    "A1Cresult_ord","max_glu_serum_ord"
+]
+num_cols = [c for c in num_cols if c in df.columns]
+
+X_num = df[num_cols].dropna()
+
+# Escalado para PCA
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_num)
+
 
 
 df
