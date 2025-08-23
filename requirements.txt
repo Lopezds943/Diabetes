@@ -8,3 +8,6 @@ prince==0.13.0
 ucimlrepo>=0.0.7
 tqdm>=4.66
 mca==1.0.4
+prince==0.13.0
+ucimlrepo==0.0.7
+tqdm==4.66
