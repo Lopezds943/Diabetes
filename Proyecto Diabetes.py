@@ -263,5 +263,26 @@ for dcol in ["diag_1", "diag_2", "diag_3"]:
         df[f"{dcol}_group"] = df[dcol].apply(icd_to_group)
 
 
+#Resumen para Streamlit
+# =======================
+st.subheader("✅ Resumen de la limpieza")
+
+st.write({
+    "Filas finales": len(df),
+    "Columnas finales": df.shape[1],
+})
+
+st.markdown("**Top 12 columnas con mayor % de NA:**")
+st.dataframe(
+    df.isna().mean().sort_values(ascending=False).head(12).to_frame("pct_na")
+)
+
+st.markdown("**Tipos de datos (muestra):**")
+st.write(df.dtypes.head(25))
+
+# Guardar versión limpia para siguientes fases
+clean_df = df.copy()
+
+
 
 df
