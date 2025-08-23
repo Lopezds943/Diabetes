@@ -11,6 +11,7 @@ from sklearn.feature_selection import SelectKBest, chi2, f_classif
 from matplotlib import pyplot
 from sklearn.impute import SimpleImputer
 from ucimlrepo import fetch_ucirepo
+from sklearn.preprocessing import StandardScaler
 import streamlit as st
 
 st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
