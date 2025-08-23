@@ -186,4 +186,16 @@ if 'gender' in df.columns:
     st.caption(f"Filas eliminadas por género inválido: {before_gender - len(df):,}")
 
 
+# Medicaciones como categóricas ordenadas
+# =======================
+from pandas.api.types import CategoricalDtype
+med_possible = {'No','Steady','Up','Down'}
+med_order = CategoricalDtype(categories=['No','Steady','Down','Up'], ordered=True)
+
+med_cols = [c for c in df.columns
+            if df[c].dtype == 'object' and set(df[c].dropna().unique()).issubset(med_possible)]
+for c in med_cols:
+    df[c] = df[c].astype(med_order)
+
+
 df
