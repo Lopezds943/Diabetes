@@ -178,4 +178,12 @@ df = df.drop(columns=cols_to_drop, errors='ignore').copy()
 st.markdown("**Columnas eliminadas por criterio de limpieza:**")
 st.write(cols_to_drop if cols_to_drop else "Ninguna")
 
+# Eliminar filas con género NaN (después de reemplazar Unknown/Invalid)
+# =======================
+if 'gender' in df.columns:
+    before_gender = len(df)
+    df = df[~df['gender'].isna()].copy()
+    st.caption(f"Filas eliminadas por género inválido: {before_gender - len(df):,}")
+
+
 df
