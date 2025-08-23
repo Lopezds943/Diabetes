@@ -161,6 +161,21 @@ if 'max_glu_serum' in df.columns:
     df['max_glu_serum_ord'] = df['max_glu_serum'].map(map_glu)
 
 
-# Mostrar primeras filas
-df
+#Eliminar columnas con muchos NA / varianza nula
+# =======================
+na_rate = df.isna().mean()
+MISSING_COL_THRESH = 0.50
 
+cols_many_na = na_rate[na_rate > MISSING_COL_THRESH].index.tolist()
+low_var_cols = [c for c in df.columns if df[c].nunique(dropna=False) <= 1]
+
+force_drop = [c for c in ['weight','examide','citoglipton','payer_code'] if c in df.columns]
+# Si quieres conservar 'payer_code' para EDA, quítala de force_drop.
+
+cols_to_drop = sorted(set(cols_many_na + low_var_cols + force_drop))
+df = df.drop(columns=cols_to_drop, errors='ignore').copy()
+
+st.markdown("**Columnas eliminadas por criterio de limpieza:**")
+st.write(cols_to_drop if cols_to_drop else "Ninguna")
+
+df
