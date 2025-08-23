@@ -209,4 +209,38 @@ if 'age' in df.columns:
     df['age'] = df['age'].astype(age_order)
 
 
+#Agrupar diagnósticos ICD-9 a categorías clínicas
+# =======================
+def icd_to_group(code) -> str:
+    if pd.isna(code):
+        return "Missing"
+    code = str(code).strip()
+    if code.startswith(("V","E")):
+        return "Supplementary"
+    try:
+        num = float(code)   # maneja '250.13'
+    except:
+        return "Other"
+    if 390 <= num <= 459 or num == 785:          return "Circulatory"
+    if 460 <= num <= 519 or num == 786:          return "Respiratory"
+    if 520 <= num <= 579 or num == 787:          return "Digestive"
+    if int(num) == 250:                           return "Diabetes"
+    if 800 <= num <= 999:                         return "Injury"
+    if 710 <= num <= 739:                         return "Musculoskeletal"
+    if 580 <= num <= 629 or num == 788:          return "Genitourinary"
+    if 140 <= num <= 239:                         return "Neoplasms"
+    if 240 <= num <= 279 and int(num) != 250:    return "Endocrine"
+    if 680 <= num <= 709 or num == 782:          return "Skin"
+    if 1   <= num <= 139:                         return "Infectious"   # <-- corregido (sin 001)
+    if 290 <= num <= 319:                         return "Mental"
+    if 320 <= num <= 389:                         return "Nervous"
+    if 280 <= num <= 289:                         return "Blood"
+    if 630 <= num <= 679:                         return "Pregnancy"
+    return "Other"
+
+for dcol in ['diag_1','diag_2','diag_3']:
+    if dcol in df.columns:
+        df[f'{dcol}_group'] = df[dcol].apply(icd_to_group)
+
+
 df
