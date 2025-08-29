@@ -493,31 +493,27 @@ else:
     else:
         st.info("No hay variables numéricas para evaluar con ANOVA F.")
 
-    # ——— 2) CATEGÓRICAS → Chi² ———
-    st.markdown("**Ranking de variables categóricas (Chi²):**")
+st.markdown("**Ranking de variables categóricas (Chi²):**")
 
-    cat_cols = [c for c in df.select_dtypes(include=["object","category","bool"]).columns
-                if c not in ["readmitted"]]  # excluye la textual del target
+cat_cols = [c for c in df.select_dtypes(include=["object","category","bool"]).columns
+            if c not in ["readmitted"]]  # excluye la textual del target
 
-    if len(cat_cols) == 0:
-        st.info("No hay variables categóricas para evaluar con Chi².")
-    else:
-        mask_cat = y_full.notna()
-        y_cat = y_full.loc[mask_cat].astype(int)
+if len(cat_cols) == 0:
+    st.info("No hay variables categóricas para evaluar con Chi².")
+else:
+    # Filas válidas del target
+    mask_cat = y_full.notna()
+    y_cat = y_full.loc[mask_cat].astype(int)
 
-        X_cat_enc = pd.DataFrame(index=df.index)
-        for c in cat_cols:
-            s = df[c].copy()
-            if s.dtype == bool:
-                s = s.astype("object")
-            if is_categorical_dtype(s):
-                if "Missing" not in s.cat.categories:
-                    s = s.cat.add_categories(["Missing"])
-                def safe_fillna_missing(frame: pd.DataFrame) -> pd.DataFrame:
-    """Rellena NA con 'Missing' columna a columna, agregando la categoría
-    cuando la serie es Categorical. Devuelve object (no string/pyarrow)."""
-    out = {}
-    for c, s in frame.items():
+    # Codificación robusta columna a columna
+    X_cat_enc = pd.DataFrame(index=df.index)
+    for c in cat_cols:
+        s = df[c].copy()
+
+        # Normaliza tipos y faltantes SIN usar fillna sobre todo el DataFrame
+        if s.dtype == bool:
+            s = s.astype("object")
+
         if is_categorical_dtype(s):
             if "Missing" not in s.cat.categories:
                 s = s.cat.add_categories(["Missing"])
@@ -525,32 +521,31 @@ else:
         else:
             s = s.astype("object")
             s = s.where(s.notna(), "Missing")
-        out[c] = s
-    return pd.DataFrame(out, index=frame.index)
-            else:
-                s = s.astype("object")
-                s = s.where(s.notna(), "Missing")
 
-            le = LabelEncoder()
-            try:
-                X_cat_enc[c] = le.fit_transform(s.astype(str))
-            except Exception as e:
-                st.caption(f"Se omite '{c}' en Chi²: {e}")
-                continue
+        # LabelEncoder → enteros 0..K-1 (requisito de chi2)
+        le = LabelEncoder()
+        try:
+            X_cat_enc[c] = le.fit_transform(s.astype(str))
+        except Exception as e:
+            st.caption(f"Se omite '{c}' en Chi²: {e}")
+            continue
 
-        X_cat_enc = X_cat_enc.loc[mask_cat]
+    # Mantener solo filas con target válido
+    X_cat_enc = X_cat_enc.loc[mask_cat]
 
-        const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
-        if const_cols:
-            X_cat_enc = X_cat_enc.drop(columns=const_cols)
+    # Quitar columnas sin varianza (constantes)
+    const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
+    if const_cols:
+        X_cat_enc = X_cat_enc.drop(columns=const_cols)
 
-        if X_cat_enc.shape[1] >= 1:
-            sel_chi = SelectKBest(score_func=chi2, k="all").fit(X_cat_enc, y_cat)
-            scores_chi = (pd.DataFrame({
-                "Variable": X_cat_enc.columns,
-                "Chi2": sel_chi.scores_,
-                "p_value": sel_chi.pvalues_
-            }).sort_values("Chi2", ascending=False))
-            st.dataframe(scores_chi.round(4))
-        else:
-            st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
+    if X_cat_enc.shape[1] >= 1:
+        sel_chi = SelectKBest(score_func=chi2, k="all").fit(X_cat_enc, y_cat)
+        scores_chi = (pd.DataFrame({
+            "Variable": X_cat_enc.columns,
+            "Chi2": sel_chi.scores_,
+            "p_value": sel_chi.pvalues_
+        }).sort_values("Chi2", ascending=False))
+        st.dataframe(scores_chi.round(4))
+    else:
+        st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
+
