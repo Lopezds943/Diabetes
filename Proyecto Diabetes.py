@@ -346,3 +346,56 @@ else:
 
     X_cat = pd.DataFrame(X_cat)              # <-- garantizamos DataFrame
     X_cat = X_cat.reset_index(drop=True)     # índices limpios
+  # 2) Eliminar columnas constantes (1 sola categoría tras el fillna)
+    const_cols = [c for c in X_cat.columns if X_cat[c].nunique(dropna=False) <= 1]
+    if const_cols:
+        st.caption(f"Columnas categóricas constantes eliminadas para MCA: {const_cols}")
+        X_cat = X_cat.drop(columns=const_cols)
+
+    # 3) Doble chequeo de tipo (debug útil)
+    # st.write(type(X_cat), X_cat.dtypes.to_dict())
+
+    if X_cat.shape[1] < 2:
+        st.warning("Tras limpiar constantes, quedan < 2 columnas para MCA.")
+    else:
+        # 4) Ajustar MCA
+        mca = prince.MCA(n_components=2, random_state=42)
+        mca = mca.fit(X_cat)
+
+        # 5) Inercia explicada (con fallback)
+        inertia = getattr(mca, "explained_inertia_", None)
+        if inertia is None:
+            eig = getattr(mca, "eigenvalues_", None)
+            if eig is not None:
+                eig = np.array(eig, dtype=float).ravel()
+                inertia = (eig / eig.sum()).tolist() if eig.sum() > 0 else []
+            else:
+                inertia = []
+
+        if inertia:
+            st.write("**Inercia explicada por componente:**", [round(x, 4) for x in inertia[:2]])
+            st.caption("La inercia es el análogo a la varianza explicada en PCA.")
+        else:
+            st.warning("No fue posible recuperar la inercia explicada (el MCA sí se calculó).")
+
+        # 6) Tabla de coordenadas
+        coords = mca.column_coordinates(X_cat)
+        st.markdown("**Coordenadas de categorías (Dim1, Dim2):**")
+        st.dataframe(coords.round(3))
+
+        # 7) Biplot seguro
+        try:
+            fig, ax = plt.subplots(figsize=(6, 6))
+            mca.plot_coordinates(
+                X_cat,
+                ax=ax,
+                show_row_points=False,
+                show_column_points=True,
+                column_points_size=30,
+                show_row_labels=False,
+                show_column_labels=True
+            )
+            ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)")
+            st.pyplot(fig)
+        except Exception as e:
+            st.warning(f"No se pudo generar el biplot de MCA: {e}")
