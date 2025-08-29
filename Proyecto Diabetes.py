@@ -383,27 +383,42 @@ else:
         st.markdown("**Coordenadas de categorías (Dim1, Dim2):**")
         st.dataframe(coords.round(3))
 
-# --- Biplot manual (compatible con todas las versiones) ---
-coords = mca.column_coordinates(X_cat)  # DataFrame: filas=categorías, cols=Dim 0, Dim 1, ...
-# Nombres de columnas pueden variar; tomamos las dos primeras
-dim1 = coords.columns[0]
-dim2 = coords.columns[1]
+# Coordenadas de categorías
+coords = mca.column_coordinates(X_cat)
+dim1, dim2 = coords.columns[0], coords.columns[1]
 
-fig, ax = plt.subplots(figsize=(7, 7))
-ax.scatter(coords[dim1], coords[dim2], s=30)
+# Distancia al origen para seleccionar las más relevantes
+coords["dist"] = (coords[dim1]**2 + coords[dim2]**2)**0.5
 
-# Ejes en el origen y títulos
-ax.axhline(0, linewidth=1)
-ax.axvline(0, linewidth=1)
-ax.set_xlabel(str(dim1))
-ax.set_ylabel(str(dim2))
-ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)")
+# Asignar colores según la variable original (ej. race, age, etc.)
+variable_names = [c.split("_")[0] for c in coords.index]
+unique_vars = list(set(variable_names))
+color_map = {var: cm.tab10(i % 10) for i, var in enumerate(unique_vars)}
+colors = [color_map[v] for v in variable_names]
 
-# Para no saturar, anotamos las 20 categorías más alejadas del origen
-dist = (coords[dim1]**2 + coords[dim2]**2).pow(0.5)
-to_annotate = dist.sort_values(ascending=False).head(20).index
-for label in to_annotate:
+fig, ax = plt.subplots(figsize=(9, 9))
+
+# Puntos
+ax.scatter(coords[dim1], coords[dim2], c=colors, s=40, alpha=0.8)
+
+# Líneas de referencia
+ax.axhline(0, color="grey", linewidth=1)
+ax.axvline(0, color="grey", linewidth=1)
+
+# Etiquetas: mostramos solo las 20 más alejadas
+to_annotate = coords.sort_values("dist", ascending=False).head(20)
+for label in to_annotate.index:
     x, y = coords.loc[label, dim1], coords.loc[label, dim2]
-    ax.annotate(str(label), (x, y), xytext=(3, 3), textcoords="offset points", fontsize=9)
+    ax.annotate(str(label), (x, y), xytext=(5, 5), textcoords="offset points", fontsize=9)
+
+ax.set_xlabel(f"{dim1}")
+ax.set_ylabel(f"{dim2}")
+ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)", fontsize=14)
+
+# Leyenda por variable
+handles = [plt.Line2D([0], [0], marker="o", color="w", label=var,
+                      markerfacecolor=color_map[var], markersize=8)
+           for var in unique_vars]
+ax.legend(handles=handles, title="Variables", bbox_to_anchor=(1.05, 1), loc="upper left")
 
 st.pyplot(fig)
