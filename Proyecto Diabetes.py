@@ -477,3 +477,60 @@ st.download_button(
     file_name="final_diabetes_pca_mca.csv",
     mime="text/csv"
 )
+
+
+st.subheader("🔎 Selección de variables (Chi² / ANOVA F)")
+
+# --- Target binario ---
+y = df["readmitted_any"]
+
+# --- Variables numéricas ---
+num_cols = [
+    "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
+    "number_outpatient","number_emergency","number_inpatient","number_diagnoses",
+    "A1Cresult_ord","max_glu_serum_ord"
+]
+num_cols = [c for c in num_cols if c in df.columns]
+
+X_num = df[num_cols].fillna(0)
+
+if len(num_cols) > 0:
+    sel_f = SelectKBest(score_func=f_classif, k="all")
+    sel_f.fit(X_num, y)
+    scores_f = pd.DataFrame({
+        "Variable": num_cols,
+        "ANOVA_F": sel_f.scores_,
+        "p_value": sel_f.pvalues_
+    }).sort_values("ANOVA_F", ascending=False)
+    
+    st.markdown("**Ranking de variables numéricas (ANOVA F):**")
+    st.dataframe(scores_f.round(4))
+else:
+    st.info("No hay variables numéricas para evaluar con ANOVA F.")
+
+# --- Variables categóricas ---
+cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns if c not in ["readmitted"]]
+
+if len(cat_cols) > 0:
+    # Convertir categóricas a codificación numérica simple
+    X_cat = df[cat_cols].fillna("Missing")
+    X_cat_enc = pd.DataFrame(index=X_cat.index)
+    for c in cat_cols:
+        le = LabelEncoder()
+        try:
+            X_cat_enc[c] = le.fit_transform(X_cat[c].astype(str))
+        except:
+            continue
+    
+    sel_chi = SelectKBest(score_func=chi2, k="all")
+    sel_chi.fit(X_cat_enc, y)
+    scores_chi = pd.DataFrame({
+        "Variable": X_cat_enc.columns,
+        "Chi2": sel_chi.scores_,
+        "p_value": sel_chi.pvalues_
+    }).sort_values("Chi2", ascending=False)
+    
+    st.markdown("**Ranking de variables categóricas (Chi²):**")
+    st.dataframe(scores_chi.round(4))
+else:
+    st.info("No hay variables categóricas para evaluar con Chi².")
