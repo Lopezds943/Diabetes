@@ -481,94 +481,112 @@ st.download_button(
 )
 
 
+# ================================
+# 🔎 Selección de variables (Chi² / ANOVA F)
+# ================================
+from sklearn.feature_selection import SelectKBest, chi2, f_classif
+from sklearn.preprocessing import LabelEncoder
+from pandas.api.types import is_categorical_dtype
+
 st.subheader("🔎 Selección de variables (Chi² / ANOVA F)")
 
-# --- Target binario ---
-y = df["readmitted_any"]
-
-# --- Variables numéricas ---
-num_cols = [
-    "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
-    "number_outpatient","number_emergency","number_inpatient","number_diagnoses",
-    "A1Cresult_ord","max_glu_serum_ord"
-]
-num_cols = [c for c in num_cols if c in df.columns]
-
-X_num = df[num_cols].fillna(0)
-
-if len(num_cols) > 0:
-    sel_f = SelectKBest(score_func=f_classif, k="all")
-    sel_f.fit(X_num, y)
-    scores_f = pd.DataFrame({
-        "Variable": num_cols,
-        "ANOVA_F": sel_f.scores_,
-        "p_value": sel_f.pvalues_
-    }).sort_values("ANOVA_F", ascending=False)
-    
-    st.markdown("**Ranking de variables numéricas (ANOVA F):**")
-    st.dataframe(scores_f.round(4))
+# ---- Target binario ----
+if "readmitted_any" not in df.columns:
+    st.error("No encuentro la columna 'readmitted_any'. Créala antes de esta sección.")
 else:
-    st.info("No hay variables numéricas para evaluar con ANOVA F.")
+    y_full = df["readmitted_any"].astype("float")   # por si hay NaN
 
+    # =============================
+    # 1) NUMÉRICAS → ANOVA F
+    # =============================
+    num_cols = [
+        "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
+        "number_outpatient","number_emergency","number_inpatient","number_diagnoses",
+        "A1Cresult_ord","max_glu_serum_ord"
+    ]
+    num_cols = [c for c in num_cols if c in df.columns]
 
-st.markdown("**Ranking de variables categóricas (Chi²):**")
+    if len(num_cols) > 0:
+        # Imputa 0 (o medianas si prefieres) para no perder filas
+        X_num = df[num_cols].fillna(0)
 
-cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns
-            if c not in ["readmitted"]]  # excluye la textual del target
+        # Filas válidas del target
+        mask_num = y_full.notna()
+        y_num = y_full[mask_num].astype(int)
+        X_num = X_num.loc[mask_num]
 
-if len(cat_cols) == 0:
-    st.info("No hay variables categóricas para evaluar con Chi².")
-else:
-    # Target binario y máscara de filas válidas
-    y = df["readmitted_any"].astype("float")
-    mask = y.notna()
-    y_ = y[mask].astype(int)
+        # ANOVA F
+        sel_f = SelectKBest(score_func=f_classif, k="all")
+        sel_f.fit(X_num, y_num)
 
-    # Codificación robusta columna a columna (evita ArrowInvalid)
-    X_cat_enc = pd.DataFrame(index=df.index)
+        scores_f = (pd.DataFrame({
+            "Variable": X_num.columns,
+            "ANOVA_F": sel_f.scores_,
+            "p_value": sel_f.pvalues_
+        }).sort_values("ANOVA_F", ascending=False))
 
-    for c in cat_cols:
-        s = df[c].copy()
-
-        if is_categorical_dtype(s):
-            # añade categoría 'Missing' si hace falta y rellena
-            if "Missing" not in s.cat.categories:
-                s = s.cat.add_categories(["Missing"])
-            s = s.fillna("Missing")
-            # pasa a object para evitar conflictos con pyarrow
-            s = s.astype("object")
-        else:
-            # fuerza a object (python) y rellena Missing
-            s = s.astype("object")
-            s = s.where(s.notna(), "Missing")
-
-        # LabelEncoder -> enteros 0..K-1 (requerido por chi2: no negativos)
-        le = LabelEncoder()
-        try:
-            X_cat_enc[c] = le.fit_transform(s.astype(str))
-        except Exception:
-            # si no se puede codificar, se omite la columna
-            continue
-
-    # Mantén sólo filas con target válido
-    X_cat_enc = X_cat_enc.loc[mask]
-
-    # Elimina columnas constantes (sin varianza) para evitar nans en chi2
-    const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
-    if const_cols:
-        X_cat_enc = X_cat_enc.drop(columns=const_cols)
-
-    if X_cat_enc.shape[1] >= 1:
-        sel_chi = SelectKBest(score_func=chi2, k="all")
-        sel_chi.fit(X_cat_enc, y_)
-
-        scores_chi = (pd.DataFrame({
-            "Variable": X_cat_enc.columns,
-            "Chi2": sel_chi.scores_,
-            "p_value": sel_chi.pvalues_
-        })
-        .sort_values("Chi2", ascending=False))
-
-        st.dataframe(scores_chi.round(4))
+        st.markdown("**Ranking de variables numéricas (ANOVA F):**")
+        st.dataframe(scores_f.round(4))
     else:
-        st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
+        st.info("No hay variables numéricas para evaluar con ANOVA F.")
+
+    # =============================
+    # 2) CATEGÓRICAS → Chi²
+    # =============================
+    st.markdown("**Ranking de variables categóricas (Chi²):**")
+
+    cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns
+                if c not in ["readmitted"]]  # excluye la textual del target
+
+    if len(cat_cols) == 0:
+        st.info("No hay variables categóricas para evaluar con Chi².")
+    else:
+        # Filas válidas del target
+        mask_cat = y_full.notna()
+        y_cat = y_full[mask_cat].astype(int)
+
+        # Codificación robusta columna a columna (soporta CategoricalDtype / pyarrow)
+        X_cat_enc = pd.DataFrame(index=df.index)
+
+        for c in cat_cols:
+            s = df[c].copy()
+
+            # Si es categórica, añade "Missing" a las categorías antes de rellenar
+            if is_categorical_dtype(s):
+                if "Missing" not in s.cat.categories:
+                    s = s.cat.add_categories(["Missing"])
+                s = s.fillna("Missing").astype("object")
+            else:
+                # Trabaja en 'object' y rellena Missing
+                s = s.astype("object")
+                s = s.where(s.notna(), "Missing")
+
+            # LabelEncoder -> enteros 0..K-1 (requerido por chi2)
+            le = LabelEncoder()
+            try:
+                X_cat_enc[c] = le.fit_transform(s.astype(str))
+            except Exception:
+                # Si hay alguna columna problemática, se omite
+                continue
+
+        # Mantener solo filas con target válido
+        X_cat_enc = X_cat_enc.loc[mask_cat]
+
+        # Eliminar columnas constantes (sin varianza)
+        const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
+        if const_cols:
+            X_cat_enc = X_cat_enc.drop(columns=const_cols)
+
+        if X_cat_enc.shape[1] >= 1:
+            sel_chi = SelectKBest(score_func=chi2, k="all")
+            sel_chi.fit(X_cat_enc, y_cat)
+
+            scores_chi = (pd.DataFrame({
+                "Variable": X_cat_enc.columns,
+                "Chi2": sel_chi.scores_,
+                "p_value": sel_chi.pvalues_
+            }).sort_values("Chi2", ascending=False))
+
+            st.dataframe(scores_chi.round(4))
+        else:
+            st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
