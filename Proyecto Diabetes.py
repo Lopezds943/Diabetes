@@ -510,29 +510,56 @@ if len(num_cols) > 0:
 else:
     st.info("No hay variables numéricas para evaluar con ANOVA F.")
 
-# --- Variables categóricas ---
-cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns if c not in ["readmitted"]]
 
-if len(cat_cols) > 0:
-    # Convertir categóricas a codificación numérica simple
-    X_cat = df[cat_cols].fillna("Missing")
-    X_cat_enc = pd.DataFrame(index=X_cat.index)
+# 1) columnas categóricas (excluye el target textual si lo tienes)
+cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns
+            if c not in ["readmitted"]]
+
+if len(cat_cols) == 0:
+    st.info("No hay variables categóricas para evaluar con Chi².")
+else:
+    # y binario y filas válidas
+    y = df["readmitted_any"]
+    mask = y.notna()  # por si acaso
+    y_ = y[mask].astype(int)
+
+    # 2) Construimos X_cat_enc codificada numéricamente y sin NaN
+    X_cat_enc = pd.DataFrame(index=df.index)
+
     for c in cat_cols:
+        s = df[c].copy()
+
+        # Añadir categoría "Missing" si ya es categorical, o convertir a string/object si no
+        if is_categorical_dtype(s):
+            if "Missing" not in s.cat.categories:
+                s = s.cat.add_categories(["Missing"])
+            s = s.fillna("Missing").astype("object")
+        else:
+            s = s.astype("string").fillna("Missing").astype("object")
+
+        # LabelEncoder → valores 0..K-1 (requerido por chi2: no negativos)
         le = LabelEncoder()
         try:
-            X_cat_enc[c] = le.fit_transform(X_cat[c].astype(str))
-        except:
+            X_cat_enc[c] = le.fit_transform(s.astype(str))
+        except Exception:
+            # si algo raro pasa, salta la columna
             continue
-    
-    sel_chi = SelectKBest(score_func=chi2, k="all")
-    sel_chi.fit(X_cat_enc, y)
-    scores_chi = pd.DataFrame({
-        "Variable": X_cat_enc.columns,
-        "Chi2": sel_chi.scores_,
-        "p_value": sel_chi.pvalues_
-    }).sort_values("Chi2", ascending=False)
-    
-    st.markdown("**Ranking de variables categóricas (Chi²):**")
-    st.dataframe(scores_chi.round(4))
-else:
-    st.info("No hay variables categóricas para evaluar con Chi².")
+
+    # Alinear con las filas válidas del target
+    X_cat_enc = X_cat_enc.loc[mask]
+
+    # 3) Chi² sobre todas las columnas
+    if X_cat_enc.shape[1] >= 1:
+        sel_chi = SelectKBest(score_func=chi2, k="all")
+        sel_chi.fit(X_cat_enc, y_)
+
+        scores_chi = (pd.DataFrame({
+            "Variable": X_cat_enc.columns,
+            "Chi2": sel_chi.scores_,
+            "p_value": sel_chi.pvalues_
+        })
+        .sort_values("Chi2", ascending=False))
+
+        st.dataframe(scores_chi.round(4))
+    else:
+        st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
