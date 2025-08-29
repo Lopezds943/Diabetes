@@ -17,6 +17,8 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import prince
 from pandas.api.types import is_categorical_dtype
+from sklearn.feature_selection import SelectKBest, chi2, f_classif
+from sklearn.preprocessing import LabelEncoder
 
 
 st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
