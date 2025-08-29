@@ -591,4 +591,12 @@ else:
         X, y, test_size=0.25, stratify=y, random_state=42
     )
 
+ # ===========================
+    # 2) Balance de clases (plot)
+    # ===========================
+    fig, ax = plt.subplots()
+    sns.countplot(x=y, ax=ax)
+    ax.set_title("Distribución de clases (dataset completo)")
+    ax.set_xlabel("readmitted_any (0 = NO, 1 = Sí)")
+    st.pyplot(fig)
 
