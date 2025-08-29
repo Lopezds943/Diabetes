@@ -421,11 +421,44 @@ ax.legend(handles=handles, title="Variables", bbox_to_anchor=(1.05, 1), loc="upp
 
 st.pyplot(fig)
 
-# ---------- IDs y target ----------
+st.subheader("🧩 Dataset final (PCA + MCA)")
+
+# --- 1) Componentes PCA -> DataFrame alineado a df ---
+# X_pca proviene de: pca.fit_transform(X_scaled)
+# X_num es el subset numérico que usaste para PCA (df[num_cols].dropna())
+try:
+    n_pca = X_pca.shape[1]
+    pca_cols = [f"PCA_PC{i+1}" for i in range(n_pca)]
+    X_pca_df = pd.DataFrame(X_pca, index=X_num.index, columns=pca_cols)
+    # Reindexar a df para alinear todas las filas (las que no estaban en X_num quedan como NaN)
+    X_pca_df = X_pca_df.reindex(df.index)
+except Exception as e:
+    st.warning(f"No se pudo construir el DataFrame de PCA: {e}")
+    X_pca_df = pd.DataFrame(index=df.index)
+
+# --- 2) Coordenadas de individuos del MCA ---
+# Obtenemos las coordenadas de filas (individuos)
+try:
+    mca_rows = mca.row_coordinates(X_cat)
+    # Renombrar columnas a Dimensiones
+    mca_rows.columns = [f"MCA_Dim{i+1}" for i in range(mca_rows.shape[1])]
+    # Alinear índice con df (mismo orden de filas que usaste para X_cat)
+    if len(mca_rows) == len(df):
+        mca_rows.index = df.index
+    else:
+        # Si no coincide (no debería), reindexa con cuidado:
+        mca_rows = mca_rows.set_index(pd.Index(range(len(mca_rows))))
+        mca_rows = mca_rows.reindex(pd.Index(range(len(df))))
+        st.warning("Las filas del MCA no coincidían 1:1 con df; se reindexó por posición.")
+except Exception as e:
+    st.warning(f"No se pudo obtener coordenadas de individuos del MCA: {e}")
+    mca_rows = pd.DataFrame(index=df.index)
+
+# --- 3) IDs y targets (si existen) ---
 id_cols   = [c for c in ["encounter_id","patient_nbr"] if c in df.columns]
 target_cs = [c for c in ["readmitted","readmitted_any"] if c in df.columns]
 
-# ---------- CONCATENAR FINAL ----------
+# --- 4) Concatenar todo ---
 parts = []
 if id_cols:   parts.append(df[id_cols])
 if target_cs: parts.append(df[target_cs])
@@ -435,3 +468,12 @@ final_df = pd.concat(parts, axis=1)
 
 st.write(f"Dimensiones del dataset final: **{final_df.shape[0]:,} × {final_df.shape[1]:,}**")
 st.dataframe(final_df.head())
+
+# --- 5) Botón de descarga ---
+csv_bytes = final_df.to_csv(index=False).encode("utf-8")
+st.download_button(
+    "⬇️ Descargar dataset final (CSV)",
+    data=csv_bytes,
+    file_name="final_diabetes_pca_mca.csv",
+    mime="text/csv"
+)
