@@ -332,3 +332,17 @@ cat_cols = [c for c in [
 if len(cat_cols) < 2:
     st.info("Selecciona al menos 2 variables categóricas para ejecutar MCA.")
 else:
+    # 1) Construcción ROBUSTA de X_cat: DataFrame puro de object (strings)
+    X_cat = {}
+    for c in cat_cols:
+        s = df[c]
+        # a) convertimos a string pero preservando NaN
+        s = s.astype("string")  # dtype pandas String (permite <NA>)
+        # b) rellenamos faltantes con "Missing"
+        s = s.fillna("Missing")
+        # c) pasamos a object (lo que prince maneja bien)
+        s = s.astype("object")
+        X_cat[c] = s
+
+    X_cat = pd.DataFrame(X_cat)              # <-- garantizamos DataFrame
+    X_cat = X_cat.reset_index(drop=True)     # índices limpios
