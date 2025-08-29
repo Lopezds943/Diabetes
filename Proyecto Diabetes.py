@@ -321,34 +321,62 @@ ax.set_ylabel("Varianza Acumulada")
 ax.set_title("Scree Plot – PCA")
 st.pyplot(fig)
 
-# Variables categóricas (ejemplo: raza, sexo, edad, diagnósticos agrupados, medicaciones principales)
-cat_cols = ["race","gender","age","diag_1_group","diag_2_group","diag_3_group","readmitted"]
-cat_cols = [c for c in cat_cols if c in df.columns]
-
-X_cat = df[cat_cols].dropna()
-
-# Ajustar MCA
-mca = prince.MCA(n_components=5, random_state=42)
-mca = mca.fit(X_cat)
-
-# Coordenadas de individuos
-X_mca = mca.transform(X_cat)
-
 st.subheader("📊 MCA – Análisis de Correspondencias Múltiples")
 
-st.write("Inercia explicada por componente:", mca.explained_inertia_)
+# --- columnas para MCA (ajústalas si quieres) ---
+cat_cols = [c for c in [
+    "race","gender","age","diag_1_group","diag_2_group","diag_3_group","readmitted"
+] if c in df.columns]
 
-# Biplot de categorías
-fig, ax = plt.subplots(figsize=(6,6))
-mca.plot_coordinates(
-    X_cat,
-    ax=ax,
-    show_row_points=False,
-    show_column_points=True,
-    column_points_size=30,
-    show_row_labels=False,
-    show_column_labels=True
-)
-st.pyplot(fig)
+if len(cat_cols) < 2:
+    st.info("Selecciona al menos 2 variables categóricas para ejecutar MCA.")
+else:
+    # 1) Preparación robusta
+    X_cat = df[cat_cols].copy().fillna("Missing")
+    for c in X_cat.columns:
+        X_cat[c] = X_cat[c].astype("category")
 
-df
+    # 2) Ajuste
+    mca = prince.MCA(n_components=2, random_state=42)
+    mca = mca.fit(X_cat)
+
+    # 3) Inercia explicada (con fallback por compatibilidad)
+    try:
+        inertia = mca.explained_inertia_              # disponible en algunas versiones
+    except Exception:
+        # Algunas versiones exponen eigenvalues_ como Serie/DataFrame
+        eig = getattr(mca, "eigenvalues_", None)
+        if eig is not None:
+            eig = np.array(eig).astype(float).ravel()
+            total = eig.sum()
+            inertia = (eig / total).tolist() if total > 0 else []
+        else:
+            inertia = []
+
+    if inertia:
+        st.write("**Inercia explicada por componente:**", [round(x, 4) for x in inertia[:2]])
+        st.caption("La inercia es el análogo a la varianza explicada en PCA.")
+    else:
+        st.warning("No fue posible recuperar la inercia explicada en esta versión de `prince` (se calculó el MCA igualmente).")
+
+    # 4) Coordenadas de categorías (tabla)
+    coords = mca.column_coordinates(X_cat)
+    st.markdown("**Coordenadas de categorías (Dim1, Dim2):**")
+    st.dataframe(coords.round(3))
+
+    # 5) Biplot seguro
+    try:
+        fig, ax = plt.subplots(figsize=(6, 6))
+        mca.plot_coordinates(
+            X_cat,
+            ax=ax,
+            show_row_points=False,
+            show_column_points=True,
+            column_points_size=30,
+            show_row_labels=False,
+            show_column_labels=True
+        )
+        ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)")
+        st.pyplot(fig)
+    except Exception as e:
+        st.warning(f"No se pudo generar el biplot de MCA: {e}")
