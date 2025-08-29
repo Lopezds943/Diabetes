@@ -324,47 +324,43 @@ ax.set_ylabel("Varianza Acumulada")
 ax.set_title("Scree Plot – PCA")
 st.pyplot(fig)
 
+# ===============================
+# 📊 MCA – Análisis de Correspondencias Múltiples
+# ===============================
 st.subheader("📊 MCA – Análisis de Correspondencias Múltiples")
 
-# --- columnas para MCA (ajusta si quieres) ---
 cat_cols = [c for c in [
     "race","gender","age","diag_1_group","diag_2_group","diag_3_group","readmitted"
 ] if c in df.columns]
 
+mca = None
+X_cat = None
+coords = None
+
 if len(cat_cols) < 2:
     st.info("Selecciona al menos 2 variables categóricas para ejecutar MCA.")
 else:
-    # 1) Construcción ROBUSTA de X_cat: DataFrame puro de object (strings)
+    # 1) Construcción ROBUSTA de X_cat (mismo índice que df)
     X_cat = {}
     for c in cat_cols:
         s = df[c]
-        # a) convertimos a string pero preservando NaN
-        s = s.astype("string")  # dtype pandas String (permite <NA>)
-        # b) rellenamos faltantes con "Missing"
-        s = s.fillna("Missing")
-        # c) pasamos a object (lo que prince maneja bien)
-        s = s.astype("object")
+        s = s.astype("string").fillna("Missing").astype("object")
         X_cat[c] = s
+    X_cat = pd.DataFrame(X_cat, index=df.index)   # <- SIN reset_index
 
-    X_cat = pd.DataFrame(X_cat)              # <-- garantizamos DataFrame
-    X_cat = X_cat.reset_index(drop=True)     # índices limpios
-  # 2) Eliminar columnas constantes (1 sola categoría tras el fillna)
+    # 2) Eliminar columnas constantes
     const_cols = [c for c in X_cat.columns if X_cat[c].nunique(dropna=False) <= 1]
     if const_cols:
         st.caption(f"Columnas categóricas constantes eliminadas para MCA: {const_cols}")
         X_cat = X_cat.drop(columns=const_cols)
 
-    # 3) Doble chequeo de tipo (debug útil)
-    # st.write(type(X_cat), X_cat.dtypes.to_dict())
-
     if X_cat.shape[1] < 2:
         st.warning("Tras limpiar constantes, quedan < 2 columnas para MCA.")
     else:
-        # 4) Ajustar MCA
-        mca = prince.MCA(n_components=2, random_state=42)
-        mca = mca.fit(X_cat)
+        # 3) Ajustar MCA
+        mca = prince.MCA(n_components=2, random_state=42).fit(X_cat)
 
-        # 5) Inercia explicada (con fallback)
+        # 4) Inercia explicada (con fallback)
         inertia = getattr(mca, "explained_inertia_", None)
         if inertia is None:
             eig = getattr(mca, "eigenvalues_", None)
@@ -373,220 +369,175 @@ else:
                 inertia = (eig / eig.sum()).tolist() if eig.sum() > 0 else []
             else:
                 inertia = []
-
         if inertia:
             st.write("**Inercia explicada por componente:**", [round(x, 4) for x in inertia[:2]])
             st.caption("La inercia es el análogo a la varianza explicada en PCA.")
         else:
             st.warning("No fue posible recuperar la inercia explicada (el MCA sí se calculó).")
 
-        # 6) Tabla de coordenadas
+        # 5) Tabla de coordenadas de categorías
         coords = mca.column_coordinates(X_cat)
         st.markdown("**Coordenadas de categorías (Dim1, Dim2):**")
         st.dataframe(coords.round(3))
 
-# --- Biplot manual mejorado ---
-coords = mca.column_coordinates(X_cat)
-dim1, dim2 = coords.columns[0], coords.columns[1]
+        # 6) Biplot manual mejorado
+        dim1, dim2 = coords.columns[0], coords.columns[1]
+        coords_plot = coords.copy()
+        coords_plot["dist"] = np.sqrt(coords_plot[dim1]**2 + coords_plot[dim2]**2)
 
-# Calcular distancia al origen
-coords["dist"] = (coords[dim1]**2 + coords[dim2]**2)**0.5
+        import matplotlib.cm as cm
+        variable_names = [c.split("_")[0] for c in coords_plot.index]
+        unique_vars = list(dict.fromkeys(variable_names))  # mantiene orden
+        color_map = {var: cm.tab10(i % 10) for i, var in enumerate(unique_vars)}
+        colors = [color_map[v] for v in variable_names]
 
-# Colorear categorías según variable original
-import matplotlib.cm as cm
-variable_names = [c.split("_")[0] for c in coords.index]
-unique_vars = list(set(variable_names))
-color_map = {var: cm.tab10(i % 10) for i, var in enumerate(unique_vars)}
-colors = [color_map[v] for v in variable_names]
+        fig, ax = plt.subplots(figsize=(9, 9))
+        ax.scatter(coords_plot[dim1], coords_plot[dim2], c=colors, s=40, alpha=0.8)
+        ax.axhline(0, color="grey", linewidth=1)
+        ax.axvline(0, color="grey", linewidth=1)
+        ax.set_xlabel(str(dim1))
+        ax.set_ylabel(str(dim2))
+        ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)")
 
-fig, ax = plt.subplots(figsize=(9, 9))
-ax.scatter(coords[dim1], coords[dim2], c=colors, s=40, alpha=0.8)
+        to_annotate = coords_plot.sort_values("dist", ascending=False).head(20).index
+        for label in to_annotate:
+            x, y = coords_plot.loc[label, dim1], coords_plot.loc[label, dim2]
+            ax.annotate(str(label), (x, y), xytext=(5, 5), textcoords="offset points", fontsize=9)
 
-# Ejes de referencia
-ax.axhline(0, color="grey", linewidth=1)
-ax.axvline(0, color="grey", linewidth=1)
-ax.set_xlabel(str(dim1))
-ax.set_ylabel(str(dim2))
-ax.set_title("MCA – Mapa de categorías (Dim1 vs Dim2)")
+        handles = [plt.Line2D([0], [0], marker="o", color="w", label=var,
+                              markerfacecolor=color_map[var], markersize=8)
+                   for var in unique_vars]
+        ax.legend(handles=handles, title="Variables", bbox_to_anchor=(1.05, 1), loc="upper left")
+        st.pyplot(fig)
 
-# Etiquetar solo las 20 categorías más alejadas
-to_annotate = coords.sort_values("dist", ascending=False).head(20).index
-for label in to_annotate:
-    x, y = coords.loc[label, dim1], coords.loc[label, dim2]
-    ax.annotate(str(label), (x, y), xytext=(5, 5), textcoords="offset points", fontsize=9)
-
-# Leyenda
-handles = [plt.Line2D([0], [0], marker="o", color="w", label=var,
-                      markerfacecolor=color_map[var], markersize=8)
-           for var in unique_vars]
-ax.legend(handles=handles, title="Variables", bbox_to_anchor=(1.05, 1), loc="upper left")
-
-st.pyplot(fig)
-
+# ===============================
+# 🧩 Dataset final (PCA + MCA)
+# ===============================
 st.subheader("🧩 Dataset final (PCA + MCA)")
 
-# --- 1) Componentes PCA -> DataFrame alineado a df ---
-# X_pca proviene de: pca.fit_transform(X_scaled)
-# X_num es el subset numérico que usaste para PCA (df[num_cols].dropna())
+# 1) PCA a DataFrame alineado a df
 try:
     n_pca = X_pca.shape[1]
     pca_cols = [f"PCA_PC{i+1}" for i in range(n_pca)]
-    X_pca_df = pd.DataFrame(X_pca, index=X_num.index, columns=pca_cols)
-    # Reindexar a df para alinear todas las filas (las que no estaban en X_num quedan como NaN)
-    X_pca_df = X_pca_df.reindex(df.index)
+    X_pca_df = pd.DataFrame(X_pca, index=X_num.index, columns=pca_cols).reindex(df.index)
 except Exception as e:
     st.warning(f"No se pudo construir el DataFrame de PCA: {e}")
     X_pca_df = pd.DataFrame(index=df.index)
 
-# --- 2) Coordenadas de individuos del MCA ---
-# Obtenemos las coordenadas de filas (individuos)
+# 2) Coordenadas de individuos del MCA (si existe)
 try:
-    mca_rows = mca.row_coordinates(X_cat)
-    # Renombrar columnas a Dimensiones
-    mca_rows.columns = [f"MCA_Dim{i+1}" for i in range(mca_rows.shape[1])]
-    # Alinear índice con df (mismo orden de filas que usaste para X_cat)
-    if len(mca_rows) == len(df):
-        mca_rows.index = df.index
+    if mca is not None and X_cat is not None:
+        mca_rows = mca.row_coordinates(X_cat)
+        mca_rows.columns = [f"MCA_Dim{i+1}" for i in range(mca_rows.shape[1])]
+        mca_rows.index = df.index   # asegurar alineación
     else:
-        # Si no coincide (no debería), reindexa con cuidado:
-        mca_rows = mca_rows.set_index(pd.Index(range(len(mca_rows))))
-        mca_rows = mca_rows.reindex(pd.Index(range(len(df))))
-        st.warning("Las filas del MCA no coincidían 1:1 con df; se reindexó por posición.")
+        mca_rows = pd.DataFrame(index=df.index)
 except Exception as e:
     st.warning(f"No se pudo obtener coordenadas de individuos del MCA: {e}")
     mca_rows = pd.DataFrame(index=df.index)
 
-# --- 3) IDs y targets (si existen) ---
+# 3) IDs y targets
 id_cols   = [c for c in ["encounter_id","patient_nbr"] if c in df.columns]
 target_cs = [c for c in ["readmitted","readmitted_any"] if c in df.columns]
 
-# --- 4) Concatenar todo ---
+# 4) Concatenar
 parts = []
 if id_cols:   parts.append(df[id_cols])
 if target_cs: parts.append(df[target_cs])
 parts += [X_pca_df, mca_rows]
 
 final_df = pd.concat(parts, axis=1)
-
 st.write(f"Dimensiones del dataset final: **{final_df.shape[0]:,} × {final_df.shape[1]:,}**")
 st.dataframe(final_df.head())
 
-# --- 5) Botón de descarga ---
+# 5) Descargar
 csv_bytes = final_df.to_csv(index=False).encode("utf-8")
-st.download_button(
-    "⬇️ Descargar dataset final (CSV)",
-    data=csv_bytes,
-    file_name="final_diabetes_pca_mca.csv",
-    mime="text/csv"
-)
+st.download_button("⬇️ Descargar dataset final (CSV)", data=csv_bytes,
+                   file_name="final_diabetes_pca_mca.csv", mime="text/csv")
 
-
-# ================================
+# ===============================
 # 🔎 Selección de variables (Chi² / ANOVA F)
-# ================================
+# ===============================
 from sklearn.feature_selection import SelectKBest, chi2, f_classif
 from sklearn.preprocessing import LabelEncoder
 from pandas.api.types import is_categorical_dtype
 
 st.subheader("🔎 Selección de variables (Chi² / ANOVA F)")
 
-# ---- Target binario ----
 if "readmitted_any" not in df.columns:
     st.error("No encuentro la columna 'readmitted_any'. Créala antes de esta sección.")
 else:
-    y_full = df["readmitted_any"].astype("float")   # por si hay NaN
+    y_full = df["readmitted_any"].astype("float")
 
-    # =============================
-    # 1) NUMÉRICAS → ANOVA F
-    # =============================
-    num_cols = [
+    # ——— 1) NUMÉRICAS → ANOVA F ———
+    num_cols = [c for c in [
         "time_in_hospital","num_lab_procedures","num_procedures","num_medications",
         "number_outpatient","number_emergency","number_inpatient","number_diagnoses",
         "A1Cresult_ord","max_glu_serum_ord"
-    ]
-    num_cols = [c for c in num_cols if c in df.columns]
+    ] if c in df.columns]
 
     if len(num_cols) > 0:
-        # Imputa 0 (o medianas si prefieres) para no perder filas
         X_num = df[num_cols].fillna(0)
-
-        # Filas válidas del target
         mask_num = y_full.notna()
-        y_num = y_full[mask_num].astype(int)
         X_num = X_num.loc[mask_num]
+        y_num = y_full.loc[mask_num].astype(int)
 
-        # ANOVA F
-        sel_f = SelectKBest(score_func=f_classif, k="all")
-        sel_f.fit(X_num, y_num)
-
+        sel_f = SelectKBest(score_func=f_classif, k="all").fit(X_num, y_num)
         scores_f = (pd.DataFrame({
             "Variable": X_num.columns,
             "ANOVA_F": sel_f.scores_,
             "p_value": sel_f.pvalues_
         }).sort_values("ANOVA_F", ascending=False))
-
         st.markdown("**Ranking de variables numéricas (ANOVA F):**")
         st.dataframe(scores_f.round(4))
     else:
         st.info("No hay variables numéricas para evaluar con ANOVA F.")
 
-    # =============================
-    # 2) CATEGÓRICAS → Chi²
-    # =============================
+    # ——— 2) CATEGÓRICAS → Chi² ———
     st.markdown("**Ranking de variables categóricas (Chi²):**")
 
-    cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns
+    cat_cols = [c for c in df.select_dtypes(include=["object","category","bool"]).columns
                 if c not in ["readmitted"]]  # excluye la textual del target
 
     if len(cat_cols) == 0:
         st.info("No hay variables categóricas para evaluar con Chi².")
     else:
-        # Filas válidas del target
         mask_cat = y_full.notna()
-        y_cat = y_full[mask_cat].astype(int)
+        y_cat = y_full.loc[mask_cat].astype(int)
 
-        # Codificación robusta columna a columna (soporta CategoricalDtype / pyarrow)
         X_cat_enc = pd.DataFrame(index=df.index)
-
         for c in cat_cols:
             s = df[c].copy()
-
-            # Si es categórica, añade "Missing" a las categorías antes de rellenar
+            if s.dtype == bool:
+                s = s.astype("object")
             if is_categorical_dtype(s):
                 if "Missing" not in s.cat.categories:
                     s = s.cat.add_categories(["Missing"])
                 s = s.fillna("Missing").astype("object")
             else:
-                # Trabaja en 'object' y rellena Missing
                 s = s.astype("object")
                 s = s.where(s.notna(), "Missing")
 
-            # LabelEncoder -> enteros 0..K-1 (requerido por chi2)
             le = LabelEncoder()
             try:
                 X_cat_enc[c] = le.fit_transform(s.astype(str))
-            except Exception:
-                # Si hay alguna columna problemática, se omite
+            except Exception as e:
+                st.caption(f"Se omite '{c}' en Chi²: {e}")
                 continue
 
-        # Mantener solo filas con target válido
         X_cat_enc = X_cat_enc.loc[mask_cat]
 
-        # Eliminar columnas constantes (sin varianza)
         const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
         if const_cols:
             X_cat_enc = X_cat_enc.drop(columns=const_cols)
 
         if X_cat_enc.shape[1] >= 1:
-            sel_chi = SelectKBest(score_func=chi2, k="all")
-            sel_chi.fit(X_cat_enc, y_cat)
-
+            sel_chi = SelectKBest(score_func=chi2, k="all").fit(X_cat_enc, y_cat)
             scores_chi = (pd.DataFrame({
                 "Variable": X_cat_enc.columns,
                 "Chi2": sel_chi.scores_,
                 "p_value": sel_chi.pvalues_
             }).sort_values("Chi2", ascending=False))
-
             st.dataframe(scores_chi.round(4))
         else:
             st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
