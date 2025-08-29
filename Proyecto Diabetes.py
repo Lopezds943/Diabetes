@@ -658,3 +658,61 @@ else:
     ax.set_xlabel("# Componentes"); ax.set_ylabel("Varianza acumulada")
     ax.set_title("Varianza acumulada del PCA (train balanceado)")
     st.pyplot(fig)
+
+ # =========================================================
+    # 6) Pipelines de modelos + RandomizedSearchCV (f1_macro)
+    # =========================================================
+    # Nota: incluimos preprocesamiento dentro del pipeline del modelo
+    # y entrenamos SIEMPRE en el set balanceado.
+    def make_search(model, param_dist):
+        return RandomizedSearchCV(
+            model,
+            param_distributions=param_dist,
+            n_iter=15,
+            scoring="f1_macro",
+            cv=3,
+            n_jobs=-1,
+            random_state=42
+        )
+
+    # Param grids sencillos (≤ 15 combinaciones por RandomizedSearch)
+    grids = {
+        "RandomForest": (
+            RandomForestClassifier(random_state=42),
+            {
+                "n_estimators": [100, 200, 300, 400],
+                "max_depth": [None, 10, 20, 30],
+                "min_samples_split": [2, 5, 10]
+            }
+        ),
+        "ExtraTrees": (
+            ExtraTreesClassifier(random_state=42),
+            {
+                "n_estimators": [100, 200, 300, 400],
+                "max_depth": [None, 10, 20, 30],
+                "min_samples_split": [2, 5, 10]
+            }
+        ),
+        "HistGradientBoosting": (
+            HistGradientBoostingClassifier(random_state=42),
+            {
+                "max_depth": [None, 6, 12],
+                "learning_rate": [0.05, 0.1, 0.2],
+                "max_iter": [100, 200, 300]
+            }
+        ),
+        "LogisticRegression": (
+            LogisticRegression(max_iter=2000, n_jobs=-1),
+            {
+                "C": np.logspace(-2, 2, 7),   # 0.01 .. 100
+                "penalty": ["l2"],
+                "solver": ["lbfgs", "saga"]
+            }
+        ),
+        "SVM_Linear": (
+            LinearSVC(max_iter=10000, dual="auto", random_state=42),
+            {
+                "C": np.logspace(-2, 2, 7)   # 0.01 .. 100
+            }
+        )
+    }
