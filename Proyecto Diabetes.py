@@ -513,7 +513,20 @@ else:
             if is_categorical_dtype(s):
                 if "Missing" not in s.cat.categories:
                     s = s.cat.add_categories(["Missing"])
-                s = s.fillna("Missing").astype("object")
+                def safe_fillna_missing(frame: pd.DataFrame) -> pd.DataFrame:
+    """Rellena NA con 'Missing' columna a columna, agregando la categoría
+    cuando la serie es Categorical. Devuelve object (no string/pyarrow)."""
+    out = {}
+    for c, s in frame.items():
+        if is_categorical_dtype(s):
+            if "Missing" not in s.cat.categories:
+                s = s.cat.add_categories(["Missing"])
+            s = s.fillna("Missing").astype("object")
+        else:
+            s = s.astype("object")
+            s = s.where(s.notna(), "Missing")
+        out[c] = s
+    return pd.DataFrame(out, index=frame.index)
             else:
                 s = s.astype("object")
                 s = s.where(s.notna(), "Missing")
