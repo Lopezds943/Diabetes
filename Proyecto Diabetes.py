@@ -511,44 +511,53 @@ else:
     st.info("No hay variables numéricas para evaluar con ANOVA F.")
 
 
-# 1) columnas categóricas (excluye el target textual si lo tienes)
+st.markdown("**Ranking de variables categóricas (Chi²):**")
+
 cat_cols = [c for c in df.select_dtypes(include=["object","category"]).columns
-            if c not in ["readmitted"]]
+            if c not in ["readmitted"]]  # excluye la textual del target
 
 if len(cat_cols) == 0:
     st.info("No hay variables categóricas para evaluar con Chi².")
 else:
-    # y binario y filas válidas
-    y = df["readmitted_any"]
-    mask = y.notna()  # por si acaso
+    # Target binario y máscara de filas válidas
+    y = df["readmitted_any"].astype("float")
+    mask = y.notna()
     y_ = y[mask].astype(int)
 
-    # 2) Construimos X_cat_enc codificada numéricamente y sin NaN
+    # Codificación robusta columna a columna (evita ArrowInvalid)
     X_cat_enc = pd.DataFrame(index=df.index)
 
     for c in cat_cols:
         s = df[c].copy()
 
-        # Añadir categoría "Missing" si ya es categorical, o convertir a string/object si no
         if is_categorical_dtype(s):
+            # añade categoría 'Missing' si hace falta y rellena
             if "Missing" not in s.cat.categories:
                 s = s.cat.add_categories(["Missing"])
-            s = s.fillna("Missing").astype("object")
+            s = s.fillna("Missing")
+            # pasa a object para evitar conflictos con pyarrow
+            s = s.astype("object")
         else:
-            s = s.astype("string").fillna("Missing").astype("object")
+            # fuerza a object (python) y rellena Missing
+            s = s.astype("object")
+            s = s.where(s.notna(), "Missing")
 
-        # LabelEncoder → valores 0..K-1 (requerido por chi2: no negativos)
+        # LabelEncoder -> enteros 0..K-1 (requerido por chi2: no negativos)
         le = LabelEncoder()
         try:
             X_cat_enc[c] = le.fit_transform(s.astype(str))
         except Exception:
-            # si algo raro pasa, salta la columna
+            # si no se puede codificar, se omite la columna
             continue
 
-    # Alinear con las filas válidas del target
+    # Mantén sólo filas con target válido
     X_cat_enc = X_cat_enc.loc[mask]
 
-    # 3) Chi² sobre todas las columnas
+    # Elimina columnas constantes (sin varianza) para evitar nans en chi2
+    const_cols = [c for c in X_cat_enc.columns if X_cat_enc[c].nunique() <= 1]
+    if const_cols:
+        X_cat_enc = X_cat_enc.drop(columns=const_cols)
+
     if X_cat_enc.shape[1] >= 1:
         sel_chi = SelectKBest(score_func=chi2, k="all")
         sel_chi.fit(X_cat_enc, y_)
