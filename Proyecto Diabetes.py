@@ -600,3 +600,23 @@ else:
     ax.set_xlabel("readmitted_any (0 = NO, 1 = Sí)")
     st.pyplot(fig)
 
+  # =========================================
+    # 3) Preprocesamiento (imput., OHE, escala)
+    # =========================================
+    # NOTA: StandardScaler para numéricas; OHE para categóricas
+    num_pre = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler())
+    ])
+    cat_pre = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
+    ])
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", num_pre, X_num_cols),
+            ("cat", cat_pre, X_cat_cols)
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False
+    )
