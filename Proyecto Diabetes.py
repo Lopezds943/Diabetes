@@ -347,3 +347,7 @@ else:
         else:
             # trabajar como objeto, rellenar y luego a category
             X_cat[c] = s.astype("object").fillna("Missing").astype("category")
+
+    # 2) Ajustar MCA
+    mca = prince.MCA(n_components=2, random_state=42)
+    mca = mca.fit(X_cat)
