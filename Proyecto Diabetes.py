@@ -549,3 +549,46 @@ else:
     else:
         st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
 
+# ==============================================
+# 🔜 MODELADO CLÁSICO (train/test + pipeline ML)
+# ==============================================
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.decomposition import PCA
+
+# Modelos
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+
+# Oversampling (≠ SMOTE)
+from imblearn.over_sampling import RandomOverSampler
+
+st.header("🤖 Modelado supervisado")
+
+# ===========================
+# 1) Definir X, y y división
+# ===========================
+if "readmitted_any" not in df.columns:
+    st.error("No encuentro 'readmitted_any'. Debe existir para continuar.")
+else:
+    y = df["readmitted_any"].astype(int)
+    
+    # Quitamos IDs y la(s) etiqueta(s) del objetivo de X
+    drop_cols = [c for c in ["encounter_id", "patient_nbr", "readmitted", "readmitted_any"] if c in df.columns]
+    X = df.drop(columns=drop_cols)
+    
+    # Tipos de variables
+    X_num_cols = X.select_dtypes(include=np.number).columns.tolist()
+    X_cat_cols = X.select_dtypes(exclude=np.number).columns.tolist()
+    st.write("**# Numéricas:**", len(X_num_cols), "— **# Categóricas:**", len(X_cat_cols))
+    
+    # División 75/25 estratificada
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, stratify=y, random_state=42
+    )
+
+
