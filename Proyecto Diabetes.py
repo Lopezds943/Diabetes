@@ -16,6 +16,7 @@ import streamlit as st
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import prince
+from pandas.api.types import is_categorical_dtype
 
 
 st.title("📊 Análisis de Rehospitalización en Pacientes con Diabetes (1999–2008)")
