@@ -420,3 +420,18 @@ handles = [plt.Line2D([0], [0], marker="o", color="w", label=var,
 ax.legend(handles=handles, title="Variables", bbox_to_anchor=(1.05, 1), loc="upper left")
 
 st.pyplot(fig)
+
+# ---------- IDs y target ----------
+id_cols   = [c for c in ["encounter_id","patient_nbr"] if c in df.columns]
+target_cs = [c for c in ["readmitted","readmitted_any"] if c in df.columns]
+
+# ---------- CONCATENAR FINAL ----------
+parts = []
+if id_cols:   parts.append(df[id_cols])
+if target_cs: parts.append(df[target_cs])
+parts += [X_pca_df, mca_rows]
+
+final_df = pd.concat(parts, axis=1)
+
+st.write(f"Dimensiones del dataset final: **{final_df.shape[0]:,} × {final_df.shape[1]:,}**")
+st.dataframe(final_df.head())
