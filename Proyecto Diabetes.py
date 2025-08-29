@@ -634,3 +634,27 @@ else:
     ax.set_title("Clases en TRAIN después de RandomOverSampler")
     ax.set_xlabel("readmitted_any")
     st.pyplot(fig)
+
+# ====================================
+    # 5) PCA (90% varianza) SOLO para plot
+    # ====================================
+    # Usamos el preprocesador para obtener matriz numérica lista para PCA
+    X_train_proc = preprocessor.fit_transform(X_train_bal)
+    pca90 = PCA(n_components=0.90, random_state=42)
+    X_train_pca = pca90.fit_transform(X_train_proc)
+
+    # Scatter PC1 vs PC2
+    if X_train_pca.shape[1] >= 2:
+        fig, ax = plt.subplots()
+        sc = ax.scatter(X_train_pca[:,0], X_train_pca[:,1], c=y_train_bal, cmap="Set1", alpha=0.6)
+        ax.set_xlabel("PC1"); ax.set_ylabel("PC2")
+        ax.set_title("PCA (entrenamiento balanceado) – PC1 vs PC2")
+        st.pyplot(fig)
+
+    # Varianza acumulada
+    fig, ax = plt.subplots()
+    ax.plot(np.cumsum(pca90.explained_variance_ratio_), marker="o")
+    ax.axhline(0.90, color="r", linestyle="--")
+    ax.set_xlabel("# Componentes"); ax.set_ylabel("Varianza acumulada")
+    ax.set_title("Varianza acumulada del PCA (train balanceado)")
+    st.pyplot(fig)
