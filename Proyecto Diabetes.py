@@ -620,3 +620,17 @@ else:
         remainder="drop",
         verbose_feature_names_out=False
     )
+
+# ================================
+    # 4) Oversampling (RandomOverSampler)
+    # ================================
+    # Lo aplicamos SOLO en entrenamiento para evitar fuga de información
+    ros = RandomOverSampler(random_state=42)
+    X_train_bal, y_train_bal = ros.fit_resample(X_train, y_train)
+
+    # Gráfico clases tras oversampling
+    fig, ax = plt.subplots()
+    sns.countplot(x=y_train_bal, ax=ax)
+    ax.set_title("Clases en TRAIN después de RandomOverSampler")
+    ax.set_xlabel("readmitted_any")
+    st.pyplot(fig)
