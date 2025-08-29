@@ -324,30 +324,11 @@ st.pyplot(fig)
 
 st.subheader("📊 MCA – Análisis de Correspondencias Múltiples")
 
-# --- columnas para MCA (ajústalas si quieres) ---
+# --- columnas para MCA (ajusta si quieres) ---
 cat_cols = [c for c in [
     "race","gender","age","diag_1_group","diag_2_group","diag_3_group","readmitted"
 ] if c in df.columns]
 
-
 if len(cat_cols) < 2:
     st.info("Selecciona al menos 2 variables categóricas para ejecutar MCA.")
 else:
-    # 1) Preparación robusta: añadir categoría "Missing" si la col es Categorical; si no, castear a object->category
-    X_cat = df[cat_cols].copy()
-    for c in X_cat.columns:
-        s = X_cat[c]
-        if is_categorical_dtype(s):
-            # añade "Missing" a las categorías si hace falta y rellena
-            if "Missing" not in s.cat.categories:
-                s = s.cat.add_categories(["Missing"])
-            s = s.fillna("Missing")
-            # (opcional) mantener el "ordered" existente
-            X_cat[c] = s
-        else:
-            # trabajar como objeto, rellenar y luego a category
-            X_cat[c] = s.astype("object").fillna("Missing").astype("category")
-
-    # 2) Ajustar MCA
-    mca = prince.MCA(n_components=2, random_state=42)
-    mca = mca.fit(X_cat)
