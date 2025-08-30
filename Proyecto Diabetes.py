@@ -549,112 +549,12 @@ else:
     else:
         st.warning("Tras codificar, no quedaron columnas categóricas válidas para Chi².")
 
-# ==============================================
-# 🔜 MODELADO CLÁSICO (train/test + pipeline ML)
-# ==============================================
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
-from sklearn.decomposition import PCA
+# 💾 Descargar dataset limpio
+csv_clean = clean_df.to_csv(index=False).encode("utf-8")
+st.download_button("⬇️ Descargar dataset limpio (CSV)", csv_clean,
+                   file_name="diabetes_clean.csv", mime="text/csv")
 
-# Modelos
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC
-
-# Oversampling (≠ SMOTE)
-from imblearn.over_sampling import RandomOverSampler
-
-st.header("🤖 Modelado supervisado")
-
-# ===========================
-# 1) Definir X, y y división
-# ===========================
-if "readmitted_any" not in df.columns:
-    st.error("No encuentro 'readmitted_any'. Debe existir para continuar.")
-else:
-    y = df["readmitted_any"].astype(int)
-    
-    # Quitamos IDs y la(s) etiqueta(s) del objetivo de X
-    drop_cols = [c for c in ["encounter_id", "patient_nbr", "readmitted", "readmitted_any"] if c in df.columns]
-    X = df.drop(columns=drop_cols)
-    
-    # Tipos de variables
-    X_num_cols = X.select_dtypes(include=np.number).columns.tolist()
-    X_cat_cols = X.select_dtypes(exclude=np.number).columns.tolist()
-    st.write("**# Numéricas:**", len(X_num_cols), "— **# Categóricas:**", len(X_cat_cols))
-    
-    # División 75/25 estratificada
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, stratify=y, random_state=42
-    )
-
- # ===========================
-    # 2) Balance de clases (plot)
-    # ===========================
-    fig, ax = plt.subplots()
-    sns.countplot(x=y, ax=ax)
-    ax.set_title("Distribución de clases (dataset completo)")
-    ax.set_xlabel("readmitted_any (0 = NO, 1 = Sí)")
-    st.pyplot(fig)
-
-  # =========================================
-    # 3) Preprocesamiento (imput., OHE, escala)
-    # =========================================
-    # NOTA: StandardScaler para numéricas; OHE para categóricas
-    num_pre = Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler())
-    ])
-    cat_pre = Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
-    ])
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", num_pre, X_num_cols),
-            ("cat", cat_pre, X_cat_cols)
-        ],
-        remainder="drop",
-        verbose_feature_names_out=False
-    )
-
-# ================================
-    # 4) Oversampling (RandomOverSampler)
-    # ================================
-    # Lo aplicamos SOLO en entrenamiento para evitar fuga de información
-    ros = RandomOverSampler(random_state=42)
-    X_train_bal, y_train_bal = ros.fit_resample(X_train, y_train)
-
-    # Gráfico clases tras oversampling
-    fig, ax = plt.subplots()
-    sns.countplot(x=y_train_bal, ax=ax)
-    ax.set_title("Clases en TRAIN después de RandomOverSampler")
-    ax.set_xlabel("readmitted_any")
-    st.pyplot(fig)
-
-# ====================================
-    # 5) PCA (90% varianza) SOLO para plot
-    # ====================================
-    # Usamos el preprocesador para obtener matriz numérica lista para PCA
-    X_train_proc = preprocessor.fit_transform(X_train_bal)
-    pca90 = PCA(n_components=0.90, random_state=42)
-    X_train_pca = pca90.fit_transform(X_train_proc)
-
-    # Scatter PC1 vs PC2
-    if X_train_pca.shape[1] >= 2:
-        fig, ax = plt.subplots()
-        sc = ax.scatter(X_train_pca[:,0], X_train_pca[:,1], c=y_train_bal, cmap="Set1", alpha=0.6)
-        ax.set_xlabel("PC1"); ax.set_ylabel("PC2")
-        ax.set_title("PCA (entrenamiento balanceado) – PC1 vs PC2")
-        st.pyplot(fig)
-
-    # Varianza acumulada
-    fig, ax = plt.subplots()
-    ax.plot(np.cumsum(pca90.explained_variance_ratio_), marker="o")
-    ax.axhline(0.90, color="r", linestyle="--")
-    ax.set_xlabel("# Componentes"); ax.set_ylabel("Varianza acumulada")
-    ax.set_title("Varianza acumulada del PCA (train balanceado)")
-    st.pyplot(fig)
+# 💾 Descargar dataset PCA/MCA final (si lo quieres usar en Colab)
+csv_final = final_df.to_csv(index=False).encode("utf-8")
+st.download_button("⬇️ Descargar dataset final PCA+MCA (CSV)", csv_final,
+                   file_name="diabetes_final_pca_mca.csv", mime="text/csv")
